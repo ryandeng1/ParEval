@@ -18,6 +18,8 @@ sys.path.append("..")
 from drivers.driver_wrapper import DriverWrapper, BuildOutput, RunOutput, GeneratedTextResult
 from util import run_command
 
+import time
+
 """ Map parallelism models to driver files """
 DRIVER_MAP = {
     "serial": "serial-driver.o",
@@ -32,7 +34,8 @@ DRIVER_MAP = {
 """ Compiler settings """
 COMPILER_SETTINGS = {
     "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3"},
-    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
+    # "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -fsanitize=undefined"},
+    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -fopenmp"},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
     "mpi+omp": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
     "kokkos": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -I../tpl/kokkos/build/include ../tpl/kokkos/build/lib64/libkokkoscore.a ../tpl/kokkos/build/lib64/libkokkoscontainers.a ../tpl/kokkos/build/lib64/libkokkossimd.a"},
@@ -105,10 +108,15 @@ class CppDriverWrapper(DriverWrapper):
         try:
             run_process = run_command(launch_cmd, timeout=self.run_timeout, dry=self.dry)
         except subprocess.TimeoutExpired as e:
+            assert False
             return RunOutput(-1, str(e.stdout), f"[Timeout] {str(e.stderr)}", config=run_config)
         except UnicodeDecodeError as e:
+            assert False
             logging.warning(f"UnicodeDecodeError: {str(e)}\nRunnning command: {launch_cmd}")
             return RunOutput(-1, "", f"UnicodeDecodeError: {str(e)}", config=run_config)
+
+        print(f"self.run stdout: {run_process.stdout}")
+        print(f"self.run stderr: {run_process.stderr}")
         return RunOutput(run_process.returncode, run_process.stdout, run_process.stderr, config=run_config)
 
     def test_single_output(self, prompt: str, output: str, test_driver_file: PathLike, problem_size: str) -> GeneratedTextResult:
@@ -128,6 +136,9 @@ class CppDriverWrapper(DriverWrapper):
             compiler_kwargs["problem_size"] = problem_size  # for kokkos
             compiler_kwargs["CXXFLAGS"] += f" -I{tmpdir} -DDRIVER_PROBLEM_SIZE=\"{problem_size}\""
             build_result = self.compile(self.model_driver_file, test_driver_file, output_path=exec_path, **compiler_kwargs)
+            if build_result.exit_code != 0:
+                print(f"----- DID NOT BUILD ---- build result stderr: {build_result.stderr}")
+
             logging.debug(f"Build result: {build_result}")
             if self.display_build_errors and build_result.stderr and not build_result.did_build:
                 logging.debug(build_result.stderr)
@@ -137,8 +148,20 @@ class CppDriverWrapper(DriverWrapper):
             if build_result.did_build:
                 run_results = []
                 for c in configs:
+                    start = time.time()
                     run_result = self.run(exec_path, **c)
+                    end = time.time()
+                    print(f"one run time: {end - start}")
+                    # print(f"run result: {run_result.is_valid}")
+                    # print("----- output -----")
+                    # print(output)
+                    # assert False
                     run_results.append(run_result)
+                    if run_result.is_valid:
+                        print(f"valid run runtime: {run_result.runtime}, best sequential runtime: {run_result.best_sequential_runtime}, speedup: {run_result.best_sequential_runtime / run_result.runtime}")
+                        if run_result.best_sequential_runtime / run_result.runtime > 20:
+                            print(" ---- FAST OUTPUT ----")
+                            print(prompt+"\n"+output)
                     if self.display_runs:
                         logging.debug(run_result.stderr)
                         logging.debug(run_result.stdout)

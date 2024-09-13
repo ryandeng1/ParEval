@@ -23,6 +23,7 @@ struct Context {
     size_t N;
 };
 
+/*
 void fillRandomUndirectedGraph(std::vector<int> &A, size_t N) {
     std::fill(A.begin(), A.end(), 0);
     for (int i = 0; i < N; i += 1) {
@@ -32,6 +33,11 @@ void fillRandomUndirectedGraph(std::vector<int> &A, size_t N) {
             A[j * N + i] = A[i * N + j];
         }
     }
+}
+*/
+
+void fillRandomUndirectedGraph(std::vector<int> &A, size_t N) {
+    fillRandomUndirectedGraph_(A, N);
 }
 
 void reset(Context *ctx) {
