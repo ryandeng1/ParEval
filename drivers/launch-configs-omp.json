@@ -1,0 +1,8 @@
+{
+    "omp": {
+        "format": "{exec_path} {args} {num_threads}",
+        "params": [
+            {"num_threads": 8}
+        ]
+    }
+}
