@@ -172,7 +172,7 @@
   },
   "19_graph_shortest_path": {
     "serial": "(1<<12)",
-    "omp": "(1<<16)",
+    "omp": "(1<<20)",
     "mpi": "(1<<12)",
     "mpi+omp": "(1<<12)",
     "kokkos": "(1<<11)",
@@ -181,7 +181,7 @@
   },
   "20_histogram_pixel_histogram": {
     "serial": "(1<<22)",
-    "omp": "(1<<22)",
+    "omp": "(1<<28)",
     "mpi": "(1<<22)",
     "mpi+omp": "(1<<22)",
     "kokkos": "(1<<22)",
@@ -190,7 +190,7 @@
   },
   "21_histogram_bin_0-100": {
     "serial": "(1<<22)",
-    "omp": "(1<<22)",
+    "omp": "(1<<28)",
     "mpi": "(1<<22)",
     "mpi+omp": "(1<<22)",
     "kokkos": "(1<<22)",
@@ -199,7 +199,7 @@
   },
   "22_histogram_count_quadrants": {
     "serial": "(1<<22)",
-    "omp": "(1<<22)",
+    "omp": "(1<<28)",
     "mpi": "(1<<22)",
     "mpi+omp": "(1<<22)",
     "kokkos": "(1<<22)",
@@ -208,7 +208,7 @@
   },
   "23_histogram_first_letter_counts": {
     "serial": "(1<<22)",
-    "omp": "(1<<22)",
+    "omp": "(1<<28)",
     "mpi": "(1<<22)",
     "mpi+omp": "(1<<22)",
     "kokkos": "(1<<22)",
@@ -217,7 +217,7 @@
   },
   "24_histogram_count_quartile": {
     "serial": "(1<<22)",
-    "omp": "(1<<22)",
+    "omp": "(1<<28)",
     "mpi": "(1<<22)",
     "mpi+omp": "(1<<22)",
     "kokkos": "(1<<22)",
@@ -235,7 +235,7 @@
   },
   "26_reduce_product_of_inverses": {
     "serial": "(1<<23)",
-    "omp": "(1<<31)",
+    "omp": "(1<<30)",
     "mpi": "(1<<23)",
     "mpi+omp": "(1<<23)",
     "kokkos": "(1<<23)",
@@ -316,7 +316,7 @@
   },
   "35_search_search_for_last_struct_by_key": {
     "serial": "(1<<21)",
-    "omp": "(1<<21)",
+    "omp": "(1<<28)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
     "kokkos": "(1<<21)",
@@ -325,7 +325,7 @@
   },
   "36_search_check_if_array_contains_value": {
     "serial": "(1<<21)",
-    "omp": "(1<<21)",
+    "omp": "(1<<28)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
     "kokkos": "(1<<21)",
@@ -334,7 +334,7 @@
   },
   "37_search_find_the_closest_number_to_pi": {
     "serial": "(1<<21)",
-    "omp": "(1<<21)",
+    "omp": "(1<<28)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
     "kokkos": "(1<<21)",
@@ -343,7 +343,7 @@
   },
   "38_search_find_the_first_even_number": {
     "serial": "(1<<21)",
-    "omp": "(1<<21)",
+    "omp": "(1<<28)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
     "kokkos": "(1<<21)",
@@ -352,7 +352,7 @@
   },
   "39_search_xor_contains": {
     "serial": "(1<<21)",
-    "omp": "(1<<21)",
+    "omp": "(1<<28)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
     "kokkos": "(1<<21)",
