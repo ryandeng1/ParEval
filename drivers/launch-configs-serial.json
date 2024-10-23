@@ -1,0 +1,6 @@
+{
+    "serial": {
+        "format": "{exec_path} {args}",
+        "params": [{}]
+    }
+}
