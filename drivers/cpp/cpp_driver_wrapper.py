@@ -122,16 +122,21 @@ class CppDriverWrapper(DriverWrapper):
 
     def test_single_output(self, prompt: str, output: str, test_driver_file: PathLike, problem_size: str) -> GeneratedTextResult:
         """ Test a single generated output. """
+        code_opt = True
+
         logging.debug(f"Testing output:\n{output}")
         with tempfile.TemporaryDirectory(dir=self.scratch_dir) as tmpdir:
             # write out the prompt + output
             src_ext = "cuh" if self.parallelism_model in ["cuda", "hip"] else "hpp"
             src_path = os.path.join(tmpdir, f"generated-code.{src_ext}")
-            prompt = self.patch_prompt(prompt)
             include_header = "#include <bits/stdc++.h>"
-            # write_success = self.write_source(include_header+"\n"+prompt+"\n"+output, src_path)
-            # TODO: Ryan want this to be a standalone function
-            write_success = self.write_source(include_header+"\n"+self.patch_prompt(output), src_path)
+            if code_opt:
+                # TODO: Ryan want this to be a standalone function
+                write_success = self.write_source(include_header+"\n"+output, src_path)
+            else:
+                prompt = self.patch_prompt(prompt)
+                write_success = self.write_source(include_header+"\n"+prompt+"\n"+output, src_path)
+
             logging.debug(f"Wrote source to {src_path}.")
 
             # compile and run the output
