@@ -7,6 +7,10 @@ import torch
 from torch.utils.data import Dataset
 from transformers import StoppingCriteria
 
+def format_code_opt_prompt(prompt : str) -> str:
+    start = "Below is a program. Optimize the program and write a more efficient version in C++. Enclose your solution in ```c++ and ```."
+    prompt = f"{start}\n{prompt}\n"
+    return prompt.strip()
 
 def clean_output(output : str, prompt : str) -> str:
     """ Remove `prompt` from the begging of `output`.
@@ -111,7 +115,6 @@ def clean_instruct_output(output: str, prompt: str, response_tag: str) -> str:
         function_body = selected_block[open_brace_index + 1 : close_brace_index]
         return function_body + "}"
 
-
 class InferenceConfig(ABC):
 
     def __init__(self, prompted : bool = False):
@@ -177,8 +180,9 @@ class StarCoderConfig(InferenceConfig):
 
 class CodeLlamaConfig(InferenceConfig):
 
-    def __init__(self, prompted : bool = False):
+    def __init__(self, prompted : bool = False, code_opt : bool = False):
         super().__init__(prompted=prompted)
+        self.code_opt = code_opt
 
     def get_dtype(self):
         return torch.float16
@@ -198,9 +202,12 @@ class CodeLlamaConfig(InferenceConfig):
         return False
 
     def format_prompt(self, prompt : str) -> str:
-        if self.prompted:
-            return f"// filename: solutions/solution_1.cpp\n// here is the correct implementation of the coding exercise\n\n{prompt}"
-        return prompt.strip()
+        if not self.code_opt:
+            if self.prompted:
+                return f"// filename: solutions/solution_1.cpp\n// here is the correct implementation of the coding exercise\n\n{prompt}"
+            return prompt.strip()
+        else:
+            return format_code_opt_prompt(prompt)
 
     def clean_output(self, output: str, prompt: str) -> str:
         return clean_output(output, prompt)
@@ -341,8 +348,9 @@ class MagicoderConfig(InferenceConfig):
 
 class DeepSeekBaseConfig(InferenceConfig):
 
-    def __init__(self, prompted : bool = False):
+    def __init__(self, prompted : bool = False, code_opt : bool = False):
         super().__init__(prompted=prompted)
+        self.code_opt = code_opt
 
     def get_dtype(self):
         return torch.bfloat16
@@ -361,20 +369,32 @@ class DeepSeekBaseConfig(InferenceConfig):
         return False
 
     def format_prompt(self, prompt : str) -> str:
-        if self.prompted:
-            return f"// filename: solutions/solution_1.cpp\n// here is the correct implementation of the coding exercise\n\n{prompt}"
-        return prompt.strip()
+        if not self.code_opt:
+            if self.prompted:
+                return f"// filename: solutions/solution_1.cpp\n// here is the correct implementation of the coding exercise\n\n{prompt}"
+            return prompt.strip()
+        else:
+            return format_code_opt_prompt(prompt)
 
     def clean_output(self, output: str, prompt: str) -> str:
         return clean_output(output, prompt)
 
+def generate_pie_perf_train_prompt(src_code, fast_code=""):
+    return f"""Below is a program. Optimize the program and provide a more efficient version.
 
-class InstructConfig(InferenceConfig):
+### Program:
+{src_code}
 
-    def __init__(self, prompted : bool = False, instruction_tag : str = "### Instruction", response_tag : str = "### Response"):
+### Optimized Version:
+"""
+
+class SpeedcodeConfig(InferenceConfig):
+
+    def __init__(self, prompted : bool = False, code_opt : bool = False):
         super().__init__(prompted=prompted)
-        self.instruction_tag = instruction_tag
-        self.response_tag = response_tag
+        self.program_tag = "### Program:"
+        self.response_tag = "### Optimized Version:"
+        self.code_opt = code_opt
 
     def get_dtype(self):
         return torch.bfloat16
@@ -393,13 +413,129 @@ class InstructConfig(InferenceConfig):
         return False
 
     def format_prompt(self, prompt : str) -> str:
-        function_name = get_function_name(prompt, "cuda" if "__global__" in prompt else "serial")
-        prompt = f"Complete the following c++ function.\n```c++{prompt.strip()}```\nWrite only the function {function_name} and no other code. Enclose your solution in ```c++ and ```."
-        prompt = f"{self.instruction_tag}\n{prompt}\n{self.response_tag}\n"
-        return prompt.strip()
+        if not self.code_opt:
+            function_name = get_function_name(prompt, "cuda" if "__global__" in prompt else "serial")
+            prompt = f"Complete the following c++ function.\n```c++{prompt.strip()}```\nWrite only the function {function_name} and no other code. Enclose your solution in ```c++ and ```."
+            return prompt
+        else:
+            prompt = generate_pie_perf_train_prompt(prompt)
+            return prompt.strip()
 
     def clean_output(self, output: str, prompt: str) -> str:
-        return clean_instruct_output(output, prompt, self.response_tag)
+        if not self.code_opt:
+            return clean_instruct_output(output, prompt, self.response_tag)
+        else:
+            prompt_loc = output.find(self.response_tag)
+            if prompt_loc == -1:
+                raise ValueError(f"Prompt not found in output: {prompt}")
+            output = output[prompt_loc + len(self.response_tag):].strip()
+            return output
+
+class HPCCoderConfig(InferenceConfig):
+
+    def __init__(self, prompted : bool = False, instruction_tag : str = "### Instruction", response_tag : str = "### Response", code_opt : bool = False):
+        super().__init__(prompted=prompted)
+        self.instruction_tag = instruction_tag
+        self.response_tag = response_tag
+        self.code_opt = code_opt
+
+    def get_dtype(self):
+        return torch.bfloat16
+
+    def init_padding(self, tokenizer):
+        tokenizer.pad_token_id = tokenizer.eos_token_id  # for batching
+        tokenizer.padding_side = "left"   # for decoder-only models
+
+    def get_pad_token_id(self, tokenizer) -> int:
+        return tokenizer.pad_token_id
+
+    def get_eos_token_id(self, tokenizer) -> int:
+        return tokenizer.eos_token_id
+    
+    def trust_remote_code(self) -> bool:
+        return False
+
+    def format_prompt(self, prompt : str) -> str:
+        # function_name = get_function_name(prompt, "cuda" if "__global__" in prompt else "serial")
+        # prompt = f"Complete the following c++ function.\n```c++{prompt.strip()}```\nWrite only the function {function_name} and no other code. Enclose your solution in ```c++ and ```."
+        # assert False
+        # start = "Below is a program. Optimize the program and provide a more efficient version. Write only your solution and no other code. Enclose your solution in ```c++ and ```."
+        if not self.code_opt:
+            function_name = get_function_name(prompt, "cuda" if "__global__" in prompt else "serial")
+            prompt = f"Complete the following c++ function.\n```c++{prompt.strip()}```\nWrite only the function {function_name} and no other code. Enclose your solution in ```c++ and ```."
+            return prompt
+        else:
+            start = "Your task is to optimize the given code snippet. Enclose your solution in ```c++ and ```."
+            prompt = f"{self.instruction_tag}\n{start}\n{prompt}\n{self.response_tag}\n"
+
+            # start = "Below is a program. Optimize the program and provide a more efficient version. Enclose your solution in ```c++ and ```."
+            # prompt = f"{self.instruction_tag}\n{start}\n{prompt}\n{self.response_tag}\n"
+            return prompt.strip()
+
+    def clean_output(self, output: str, prompt: str) -> str:
+        if not self.code_opt:
+            return clean_instruct_output(output, prompt, self.response_tag)
+        else:
+            prompt_loc = output.find(self.response_tag)
+            if prompt_loc == -1:
+                raise ValueError(f"Prompt not found in output: {prompt}")
+            output = output[prompt_loc + len(self.response_tag):].strip()
+            # find all cpp code blocks
+            pattern = r'```c\+\+(.*?)```'
+            code_blocks = re.findall(pattern, output, re.DOTALL)
+            if len(code_blocks) > 0:
+                return code_blocks[0]
+            else:
+                # return original code if nothing useful found
+                return prompt
+
+
+class InstructConfig(InferenceConfig):
+
+    def __init__(self, prompted : bool = False, instruction_tag : str = "### Instruction", response_tag : str = "### Response", code_opt : bool = False):
+        super().__init__(prompted=prompted)
+        self.instruction_tag = instruction_tag
+        self.response_tag = response_tag
+        self.code_opt = code_opt
+
+    def get_dtype(self):
+        return torch.bfloat16
+
+    def init_padding(self, tokenizer):
+        tokenizer.pad_token_id = tokenizer.eos_token_id  # for batching
+        tokenizer.padding_side = "left"   # for decoder-only models
+
+    def get_pad_token_id(self, tokenizer) -> int:
+        return tokenizer.pad_token_id
+
+    def get_eos_token_id(self, tokenizer) -> int:
+        return tokenizer.eos_token_id
+    
+    def trust_remote_code(self) -> bool:
+        return False
+
+    def format_prompt(self, prompt : str) -> str:
+        if not self.code_opt:
+            function_name = get_function_name(prompt, "cuda" if "__global__" in prompt else "serial")
+            prompt = f"Complete the following c++ function.\n```c++{prompt.strip()}```\nWrite only the function {function_name} and no other code. Enclose your solution in ```c++ and ```."
+            return prompt
+        else:
+            start = "Below is a program. Optimize the program and provide a more efficient version. Enclose your solution in ```c++ and ```."
+            prompt = f"{self.instruction_tag}\n{start}\n{prompt}\n{self.response_tag}\n"
+            return prompt.strip()
+
+    def clean_output(self, output: str, prompt: str) -> str:
+        if not self.code_opt:
+            return clean_instruct_output(output, prompt, self.response_tag)
+        else:
+            prompt_loc = output.find(response_tag)
+            if prompt_loc == -1:
+                raise ValueError(f"Prompt not found in output: {prompt}")
+            output = output[prompt_loc + len(response_tag):].strip()
+            # find all cpp code blocks
+            pattern = r'```cpp(.*?)```'
+            code_blocks = re.findall(pattern, output, re.DOTALL)
+            return code_blocks[0]
 
 def get_inference_config(model_name : str, **kwargs) -> InferenceConfig:
     if model_name == "bigcode/starcoderbase":
@@ -416,12 +552,20 @@ def get_inference_config(model_name : str, **kwargs) -> InferenceConfig:
         return ReplitConfig(**kwargs)
     elif model_name.startswith('ise-uiuc/Magicoder'):
         return MagicoderConfig(**kwargs)
-    elif model_name in ['deepseek-ai/deepseek-coder-6.7b-base', 'deepseek-ai/deepseek-coder-7b-base-v1.5']:
+    elif model_name in ['deepseek-ai/deepseek-coder-6.7b-base', 'deepseek-ai/deepseek-coder-7b-base-v1.5', 'deepseek-ai/deepseek-coder-33b-base']:
         return DeepSeekBaseConfig(**kwargs)
+    elif model_name.startswith('LearningOpt/pie-hq-selfplay-7b'):
+        return SpeedcodeConfig(**kwargs)
     elif model_name.startswith('hpcgroup/hpc-coder-v2'):
-        return InstructConfig(instruction_tag='Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:', response_tag='### Response:', **kwargs)
+        return HPCCoderConfig(instruction_tag='Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:', response_tag='### Response:', **kwargs)
     elif model_name.startswith('hpcgroup/rlpf'):
         return InstructConfig(instruction_tag='### Instruction', response_tag='### Response', **kwargs)
+    elif "speedcode" in model_name:
+        return SpeedcodeConfig(**kwargs)
+    elif "speedcode" in model_name or "include" in model_name:
+        assert False
+        print(f"speedcode model selected: {model_name}")
+        return InstructConfig(instruction_tag='Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:', response_tag='### Response:', **kwargs)
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 

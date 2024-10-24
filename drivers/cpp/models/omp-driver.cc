@@ -16,6 +16,7 @@
 #include <cfloat>
 
 #include <omp.h>
+#include <chrono>
 
 class Context;
 extern "C++" {
@@ -64,7 +65,8 @@ int main(int argc, char **argv) {
     
         reset(ctx);
     }
-    printf("Time: %.*f\n", DBL_DIG-1, totalTime / NITER);
+    // printf("Time: %.*f\n", DBL_DIG-1, totalTime / NITER);
+    printf("Time: %.17g\n", totalTime / NITER);
 
     /* benchmark best */
     totalTime = 0.0;

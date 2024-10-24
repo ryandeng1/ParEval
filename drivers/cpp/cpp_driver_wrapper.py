@@ -33,7 +33,8 @@ DRIVER_MAP = {
 
 """ Compiler settings """
 COMPILER_SETTINGS = {
-    "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3"},
+    # "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3"},
+    "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3"},
     # "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -fsanitize=undefined"},
     "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -fopenmp"},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
@@ -108,15 +109,15 @@ class CppDriverWrapper(DriverWrapper):
         try:
             run_process = run_command(launch_cmd, timeout=self.run_timeout, dry=self.dry)
         except subprocess.TimeoutExpired as e:
-            assert False
+            print("--- RUN TIMEOUT ---")
             return RunOutput(-1, str(e.stdout), f"[Timeout] {str(e.stderr)}", config=run_config)
         except UnicodeDecodeError as e:
             assert False
             logging.warning(f"UnicodeDecodeError: {str(e)}\nRunnning command: {launch_cmd}")
             return RunOutput(-1, "", f"UnicodeDecodeError: {str(e)}", config=run_config)
 
-        print(f"self.run stdout: {run_process.stdout}")
-        print(f"self.run stderr: {run_process.stderr}")
+        # print(f"self.run stdout: {run_process.stdout}")
+        # print(f"self.run stderr: {run_process.stderr}")
         return RunOutput(run_process.returncode, run_process.stdout, run_process.stderr, config=run_config)
 
     def test_single_output(self, prompt: str, output: str, test_driver_file: PathLike, problem_size: str) -> GeneratedTextResult:
@@ -127,7 +128,10 @@ class CppDriverWrapper(DriverWrapper):
             src_ext = "cuh" if self.parallelism_model in ["cuda", "hip"] else "hpp"
             src_path = os.path.join(tmpdir, f"generated-code.{src_ext}")
             prompt = self.patch_prompt(prompt)
-            write_success = self.write_source(prompt+"\n"+output, src_path)
+            include_header = "#include <bits/stdc++.h>"
+            # write_success = self.write_source(include_header+"\n"+prompt+"\n"+output, src_path)
+            # TODO: Ryan want this to be a standalone function
+            write_success = self.write_source(include_header+"\n"+self.patch_prompt(output), src_path)
             logging.debug(f"Wrote source to {src_path}.")
 
             # compile and run the output
@@ -152,16 +156,31 @@ class CppDriverWrapper(DriverWrapper):
                     run_result = self.run(exec_path, **c)
                     end = time.time()
                     print(f"one run time: {end - start}")
-                    # print(f"run result: {run_result.is_valid}")
-                    # print("----- output -----")
-                    # print(output)
-                    # assert False
                     run_results.append(run_result)
+                    if run_result.is_valid and (run_result.runtime == None or run_result.runtime < 1e-6 or run_result.best_sequential_runtime / run_result.runtime > 500):
+                        print(f"--- TOO FAST OUTPUT --- runtime: {run_result.runtime} ")
+                        print(prompt+"\n"+output)
+                        print("--- RUN RESULT STDOUT ---")
+                        print(run_result.stdout)
+                        print("--- RUN RESULT STDERR ---")
+                        print(run_result.stderr)
+                        run_result.is_valid = False
+                        run_result.runtime = 0.00001
+
                     if run_result.is_valid:
+                        speedup = run_result.best_sequential_runtime / run_result.runtime
                         print(f"valid run runtime: {run_result.runtime}, best sequential runtime: {run_result.best_sequential_runtime}, speedup: {run_result.best_sequential_runtime / run_result.runtime}")
-                        if run_result.best_sequential_runtime / run_result.runtime > 20:
-                            print(" ---- FAST OUTPUT ----")
+                        if speedup > 20:
+                            print("--- FAST OUTPUT ---")
                             print(prompt+"\n"+output)
+                            print("--- RUN RESULT STDOUT ---")
+                            print(run_result.stdout)
+                            print("--- RUN RESULT STDERR ---")
+                            print(run_result.stderr)
+                    else:
+                        print("--- INCORRECT ---")
+                        print(run_result.stdout)
+
                     if self.display_runs:
                         logging.debug(run_result.stderr)
                         logging.debug(run_result.stdout)

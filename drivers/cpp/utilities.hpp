@@ -10,33 +10,33 @@
 
 #include <xoshiro.h>
 #include <omp.h>
+#include <iostream>
 
 constexpr int NUM_THREADS_SETUP = 32;
-
-std::random_device                  rand_dev;
-std::mt19937                        generator(rand_dev());
-std::uniform_int_distribution<int>  distr(0, 1);
-// std::bernoulli_distribution distr(0.5);
-xso::rng gen;
+// xso::rng gen[NUM_THREADS_SETUP];
 
 int get_random_bit() {
-    // return distr(generator);
-    // return distr(gen);
+    static thread_local xso::rng gen;
+    // return gen[omp_get_thread_num()].sample(0, 1);
     return gen.sample(0, 1);
 }
 
 int get_random_int_range(int start, int end) {
-    // return distr(generator);
-    // return distr(gen);
+    static thread_local xso::rng gen;
+    // return gen[omp_get_thread_num()].sample(start, end);
     return gen.sample(start, end);
 }
 
 template <typename DType>
 DType get_random_val_range(DType min, DType max) {
+    // auto& g = gen[omp_get_thread_num()];
+    static thread_local xso::rng gen;
     DType val;
     if constexpr (std::is_floating_point_v<DType>) {
         val = gen.sample(min, max);
+        // val = g.sample(min, max);
     } else if constexpr (std::is_integral_v<DType>) {
+        // val = g.sample(min, max - 1);
         val = gen.sample(min, max - 1);
     }
     return val;
@@ -55,7 +55,7 @@ DType get_random_val_range(DType min, DType max) {
 #endif
 
 #if !defined(MAX_VALIDATION_ATTEMPTS)
-#define MAX_VALIDATION_ATTEMPTS 2
+#define MAX_VALIDATION_ATTEMPTS 3
 #endif
 
 #if !defined(SPARSE_LA_SPARSITY)
@@ -244,7 +244,7 @@ bool fequal(Vec const& a, Vec const& b, FType epsilon = 1e-6) {
 }
 
 void fillRandomUndirectedGraph_(std::vector<int> &A, size_t N) {
-    // std::fill(A.begin(), A.end(), 0);
+    std::fill(A.begin(), A.end(), 0);
 
     #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
     for (int i = 0; i < N; i += 1) {
