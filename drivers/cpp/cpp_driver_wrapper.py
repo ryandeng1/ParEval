@@ -19,6 +19,7 @@ from drivers.driver_wrapper import DriverWrapper, BuildOutput, RunOutput, Genera
 from util import run_command
 
 import time
+import re
 
 """ Map parallelism models to driver files """
 DRIVER_MAP = {
@@ -36,7 +37,7 @@ COMPILER_SETTINGS = {
     # "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3"},
     "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3"},
     # "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -fsanitize=undefined"},
-    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -fopenmp"},
+    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -fopenmp -march=native"},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
     "mpi+omp": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
     "kokkos": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -I../tpl/kokkos/build/include ../tpl/kokkos/build/lib64/libkokkoscore.a ../tpl/kokkos/build/lib64/libkokkoscontainers.a ../tpl/kokkos/build/lib64/libkokkossimd.a"},
@@ -129,10 +130,41 @@ class CppDriverWrapper(DriverWrapper):
             # write out the prompt + output
             src_ext = "cuh" if self.parallelism_model in ["cuda", "hip"] else "hpp"
             src_path = os.path.join(tmpdir, f"generated-code.{src_ext}")
-            include_header = "#include <bits/stdc++.h>"
+            # include_header = "#include <bits/stdc++.h>"
+            include_header = "#include <bits/stdc++.h>\n#include <immintrin.h>\n"
             if code_opt:
                 # TODO: Ryan want this to be a standalone function
+                # Regex to match everything before the first '//' or '/*'
+                pattern = r'^(.*?)\s*(?=//|/\*)'
+                # Search for the pattern
+                match = re.search(pattern, prompt, re.DOTALL)
+                # defs = match.group(1).strip()
+                defs = match.group(1).strip()
+                defs = "\n".join([line.strip() for line in defs.splitlines()])
+                parse_output = "\n".join([line.strip() for line in output.splitlines()])
+                if defs not in parse_output:
+                    output = output.replace("distance(", "distance2(")
+                    output = output.replace("triangleArea(", "triangleArea2(")
+                    output = output.replace("struct Point", "struct Point2")
+
+                    output = output.replace("std::distance2(", "std::distance(")
+                    output = defs + "\n" + output
+
+                output = output.replace("dfs(", "dfs2(")
+                # output = output.replace("distance(", "distance2(")
+                # output = output.replace("triangleArea(", "triangleArea2(")
+                function_names = get_cpp_function_names(output)
+
+                # only check for repeating the same function name
+                if len(set(function_names)) == 1 and len(function_names) > 1:
+                    output = get_code_until_first_function(output)
+
+                if "bool isPowerOfTwo" not in output:
+                    isPowerOfTwo = "bool isPowerOfTwo(int x) {\nreturn (x!= 0) && ((x & (x - 1)) == 0);\n}\n"
+                    output = isPowerOfTwo + output
+
                 write_success = self.write_source(include_header+"\n"+output, src_path)
+                # write_success = self.write_source(output, src_path)
             else:
                 prompt = self.patch_prompt(prompt)
                 write_success = self.write_source(include_header+"\n"+prompt+"\n"+output, src_path)
@@ -147,6 +179,17 @@ class CppDriverWrapper(DriverWrapper):
             build_result = self.compile(self.model_driver_file, test_driver_file, output_path=exec_path, **compiler_kwargs)
             if build_result.exit_code != 0:
                 print(f"----- DID NOT BUILD ---- build result stderr: {build_result.stderr}")
+                print("--- CODE FILE ---")
+                print(output)
+
+                print("--- PROMPT ---")
+                print(prompt)
+
+                print("--- defs ---")
+                print(defs)
+
+                print("function names")
+                print(function_names)
 
             logging.debug(f"Build result: {build_result}")
             if self.display_build_errors and build_result.stderr and not build_result.did_build:
@@ -200,3 +243,64 @@ class CppDriverWrapper(DriverWrapper):
                         logging.debug(f"Ouputs:\n\tstdout: {run_result.stdout}\n\tstderr: {run_result.stderr}")
         
         return GeneratedTextResult(write_success, build_result, run_results)
+
+
+
+# ---- Added by Ryan ----
+def get_cpp_function_names(code: str):
+    """
+    Extracts all function names from a C++ source file.
+
+    Args:
+        file_path (str): Path to the C++ file.
+
+    Returns:
+        list: A list of function names found in the file.
+    """
+    # Regular expression to match C++ function signatures
+    pattern = r'\b(\w+)\s+(\w+)\s*\([^)]*\)\s*\{'
+
+    function_names = []
+
+    # Find all matches of the regex in the file
+    matches = re.findall(pattern, code)
+
+    # Extract only the function names (second group)
+    function_names = [match[1] for match in matches]
+
+    return function_names
+
+def get_code_until_first_function(lines : str):
+    """
+    Extracts all C++ code up to and including the first function with balanced braces.
+
+    Args:
+        file_path (str): Path to the C++ file.
+
+    Returns:
+        str: The code up to and including the first function.
+    """
+
+    # Variables to track the function code and brace count
+    function_code = []
+    brace_count = 0
+    in_function = False
+
+    # Iterate over the lines to find the first function
+    for line in lines:
+        function_code.append(line)
+
+        # Check if this line marks the start of a function
+        if '{' in line:
+            brace_count += line.count('{')
+            in_function = True  # We've entered the function body
+
+        if '}' in line and in_function:
+            brace_count -= line.count('}')
+
+        # If braces are balanced, we've reached the end of the function
+        if in_function and brace_count == 0:
+            break
+
+    return ''.join(function_code)  # Join the lines into a single string
+
