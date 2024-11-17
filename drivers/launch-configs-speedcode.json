@@ -1,4 +1,8 @@
 {
+    "serial": {
+        "format": "{exec_path} {args}",
+        "params": [{}]
+    },
     "omp": {
         "format": "{exec_path} {args} {num_threads}",
         "params": [
