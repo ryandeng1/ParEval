@@ -113,8 +113,6 @@ if args.code_opt:
     prompt_dataset = PromptDataset([inference_config.format_prompt(p["src_code"]) for p in prompts_repeated])
 else:
     prompt_dataset = PromptDataset([inference_config.format_prompt(p["prompt"]) for p in prompts_repeated])
-    # prompt_dataset = PromptDataset([inference_config.format_prompt(p["omp_prompt_draft"]) for p in prompts_repeated])
-    # prompt_dataset = PromptDataset([inference_config.format_prompt(p["serial_prompt_draft"]) for p in prompts_repeated])
 
 generated_outputs = generator(
     prompt_dataset,
