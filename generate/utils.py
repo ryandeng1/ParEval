@@ -7,11 +7,6 @@ import torch
 from torch.utils.data import Dataset
 from transformers import StoppingCriteria
 
-def format_code_opt_prompt(prompt : str) -> str:
-    start = "Below is a program. Optimize the program and write a more efficient version in C++. Enclose your solution in ```c++ and ```."
-    prompt = f"{start}\n{prompt}\n"
-    return prompt.strip()
-
 def clean_output(output : str, prompt : str) -> str:
     """ Remove `prompt` from the begging of `output`.
         Also truncate at the end of the function definition (i.e. matching closing brace).
@@ -79,6 +74,8 @@ def clean_instruct_output(output: str, prompt: str, response_tag: str) -> str:
     # 0. replace up to the end of the first instance of prompt
     prompt_loc = output.find(response_tag)
     if prompt_loc == -1:
+        print("--- OUTPUT ---")
+        print(output)
         raise ValueError(f"Prompt not found in output: {prompt}")
     output = output[prompt_loc + len(response_tag):].strip()
 
@@ -379,21 +376,29 @@ class DeepSeekBaseConfig(InferenceConfig):
     def clean_output(self, output: str, prompt: str) -> str:
         return clean_output(output, prompt)
 
-def generate_pie_perf_train_prompt(src_code, fast_code=""):
-    return f"""Below is a program. Optimize the program and provide a more efficient version.
-
-### Program:
-{src_code}
-
-### Optimized Version:
-"""
+def generate_code_opt_prompt_code_alpaca(src_code):
+    PROMPT_DICT = {
+        "prompt_input": (
+            "Below is an instruction that describes a task, paired with an input that provides further context. "
+            "Write a response that appropriately completes the request.\n\n"
+            "### Instruction:\n{instruction}\n\n### Input:\n{input}\n\n### Response:"
+        ),
+        "prompt_no_input": (
+            "Below is an instruction that describes a task. "
+            "Write a response that appropriately completes the request.\n\n"
+            "### Instruction:\n{instruction}\n\n### Response:"
+        ),
+    }
+    instruction = "Below is a program. Optimize the program and provide a more efficient version."
+    prompt_input = PROMPT_DICT["prompt_input"]
+    res = prompt_input.format_map({"instruction" : instruction, "input" : src_code})
+    return res
 
 class SpeedcodeConfig(InferenceConfig):
 
     def __init__(self, prompted : bool = False, code_opt : bool = False):
         super().__init__(prompted=prompted)
-        self.program_tag = "### Program:"
-        self.response_tag = "### Optimized Version:"
+        self.response_tag = "### Response:"
         self.code_opt = code_opt
 
     def get_dtype(self):
@@ -418,20 +423,22 @@ class SpeedcodeConfig(InferenceConfig):
             prompt = f"Complete the following c++ function.\n```c++{prompt.strip()}```\nWrite only the function {function_name} and no other code. Enclose your solution in ```c++ and ```."
             return prompt
         else:
-            prompt = generate_pie_perf_train_prompt(prompt)
+            prompt = generate_code_opt_prompt_code_alpaca(prompt)
             return prompt.strip()
 
     def clean_output(self, output: str, prompt: str) -> str:
         if not self.code_opt:
             return clean_instruct_output(output, prompt, self.response_tag)
         else:
+            # take everything after
             prompt_loc = output.find(self.response_tag)
             if prompt_loc == -1:
                 raise ValueError(f"Prompt not found in output: {prompt}")
             output = output[prompt_loc + len(self.response_tag):].strip()
             return output
 
-class HPCCoderConfig(InferenceConfig):
+# Config class used to evaluate HPC-Coder as well as other Instruct models
+class HPCCoderAndInstructConfig(InferenceConfig):
 
     def __init__(self, prompted : bool = False, instruction_tag : str = "### Instruction", response_tag : str = "### Response", code_opt : bool = False):
         super().__init__(prompted=prompted)
@@ -456,10 +463,6 @@ class HPCCoderConfig(InferenceConfig):
         return False
 
     def format_prompt(self, prompt : str) -> str:
-        # function_name = get_function_name(prompt, "cuda" if "__global__" in prompt else "serial")
-        # prompt = f"Complete the following c++ function.\n```c++{prompt.strip()}```\nWrite only the function {function_name} and no other code. Enclose your solution in ```c++ and ```."
-        # assert False
-        # start = "Below is a program. Optimize the program and provide a more efficient version. Write only your solution and no other code. Enclose your solution in ```c++ and ```."
         if not self.code_opt:
             function_name = get_function_name(prompt, "cuda" if "__global__" in prompt else "serial")
             prompt = f"Complete the following c++ function.\n```c++{prompt.strip()}```\nWrite only the function {function_name} and no other code. Enclose your solution in ```c++ and ```."
@@ -467,9 +470,6 @@ class HPCCoderConfig(InferenceConfig):
         else:
             start = "Your task is to optimize the given code snippet. Enclose your solution in ```c++ and ```."
             prompt = f"{self.instruction_tag}\n{start}\n{prompt}\n{self.response_tag}\n"
-
-            # start = "Below is a program. Optimize the program and provide a more efficient version. Enclose your solution in ```c++ and ```."
-            # prompt = f"{self.instruction_tag}\n{start}\n{prompt}\n{self.response_tag}\n"
             return prompt.strip()
 
     def clean_output(self, output: str, prompt: str) -> str:
@@ -518,6 +518,7 @@ class InstructConfig(InferenceConfig):
         if not self.code_opt:
             function_name = get_function_name(prompt, "cuda" if "__global__" in prompt else "serial")
             prompt = f"Complete the following c++ function.\n```c++{prompt.strip()}```\nWrite only the function {function_name} and no other code. Enclose your solution in ```c++ and ```."
+            prompt = f"{self.instruction_tag}\n{prompt}\n{self.response_tag}\n"
             return prompt
         else:
             start = "Below is a program. Optimize the program and provide a more efficient version. Enclose your solution in ```c++ and ```."
@@ -556,16 +557,12 @@ def get_inference_config(model_name : str, **kwargs) -> InferenceConfig:
         return DeepSeekBaseConfig(**kwargs)
     elif model_name.startswith('LearningOpt/pie-hq-selfplay-7b'):
         return SpeedcodeConfig(**kwargs)
-    elif model_name.startswith('hpcgroup/hpc-coder-v2'):
-        return HPCCoderConfig(instruction_tag='Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:', response_tag='### Response:', **kwargs)
+    elif model_name.startswith('hpcgroup/hpc-coder-v2') or "instruct" in model_name or "Instruct" in model_name:
+        return HPCCoderAndInstructConfig(instruction_tag='Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:', response_tag='### Response:', **kwargs)
     elif model_name.startswith('hpcgroup/rlpf'):
         return InstructConfig(instruction_tag='### Instruction', response_tag='### Response', **kwargs)
     elif "speedcode" in model_name:
         return SpeedcodeConfig(**kwargs)
-    elif "speedcode" in model_name or "include" in model_name:
-        assert False
-        print(f"speedcode model selected: {model_name}")
-        return InstructConfig(instruction_tag='Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n### Instruction:', response_tag='### Response:', **kwargs)
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 

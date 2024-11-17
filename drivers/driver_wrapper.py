@@ -174,11 +174,16 @@ class DriverWrapper(ABC):
         display_build_errors: bool = False,
         display_runs: bool = False,
         early_exit_runs: bool = False,
-        dry: bool = False
+        dry: bool = False,
+        code_opt: bool = True
     ):
         # TODO: Hack, force parallelism model to be omp to use threads
-        parallelism_model = "omp"
-        self.parallelism_model = parallelism_model
+        self.code_opt = code_opt
+        if self.code_opt:
+            parallelism_model = "omp"
+        else:
+            self.parallelism_model = parallelism_model
+
         self.validator = VALIDATORS[parallelism_model]
         self.scratch_dir = scratch_dir
         self.launch_configs = launch_configs[parallelism_model]

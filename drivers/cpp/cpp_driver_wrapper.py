@@ -34,9 +34,8 @@ DRIVER_MAP = {
 
 """ Compiler settings """
 COMPILER_SETTINGS = {
-    # "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3"},
+    # use c++20 as fast random number generation requires it
     "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3"},
-    # "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -fsanitize=undefined"},
     "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -fopenmp -march=native"},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
     "mpi+omp": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
@@ -44,6 +43,19 @@ COMPILER_SETTINGS = {
     "cuda": {"CXX": "nvcc", "CXXFLAGS": "-std=c++17 --generate-code arch=compute_80,code=sm_80 -O3 -Xcompiler \"-std=c++17 -O3\""},
     "hip": {"CXX": "hipcc", "CXXFLAGS": "-std=c++17 -O3 -Xcompiler \"-std=c++17\" -Xcompiler \"-O3\" -Wno-unused-result"}
 }
+
+# There are certain problems that don't play nice with code optimization.
+# baseline code sometimes defines helper functions that will conflict with a LLM's output.
+# This only affects a few problems below, so this is a quick and dirty hack to solve some compiler errors that arise for these problems.
+def check_code_compile_errors(output):
+    if "dfs(" in output:
+        output = output.replace("dfs(", "dfs_helper(")
+
+    if "void fft(std::vector<std::complex<double>> &x)" in output:
+        output = output.replace("fft(", "fft_helper(")
+        output = output.replace("ifft_helper(", "ifft(")
+
+    return output
 
 def build_kokkos(driver_src: PathLike, output_root: PathLike, problem_size: str = "(1<<20)"):
     """ Custom steps for the Kokkos programs, since they require cmake """
@@ -117,8 +129,6 @@ class CppDriverWrapper(DriverWrapper):
             logging.warning(f"UnicodeDecodeError: {str(e)}\nRunnning command: {launch_cmd}")
             return RunOutput(-1, "", f"UnicodeDecodeError: {str(e)}", config=run_config)
 
-        # print(f"self.run stdout: {run_process.stdout}")
-        # print(f"self.run stderr: {run_process.stderr}")
         return RunOutput(run_process.returncode, run_process.stdout, run_process.stderr, config=run_config)
 
     def test_single_output(self, prompt: str, output: str, test_driver_file: PathLike, problem_size: str) -> GeneratedTextResult:
@@ -130,41 +140,12 @@ class CppDriverWrapper(DriverWrapper):
             # write out the prompt + output
             src_ext = "cuh" if self.parallelism_model in ["cuda", "hip"] else "hpp"
             src_path = os.path.join(tmpdir, f"generated-code.{src_ext}")
-            # include_header = "#include <bits/stdc++.h>"
+
+            # include the entire C++ standard library as well as header for vectorization
             include_header = "#include <bits/stdc++.h>\n#include <immintrin.h>\n"
-            if code_opt:
-                # TODO: Ryan want this to be a standalone function
-                # Regex to match everything before the first '//' or '/*'
-                pattern = r'^(.*?)\s*(?=//|/\*)'
-                # Search for the pattern
-                match = re.search(pattern, prompt, re.DOTALL)
-                # defs = match.group(1).strip()
-                defs = match.group(1).strip()
-                defs = "\n".join([line.strip() for line in defs.splitlines()])
-                parse_output = "\n".join([line.strip() for line in output.splitlines()])
-                if defs not in parse_output:
-                    output = output.replace("distance(", "distance2(")
-                    output = output.replace("triangleArea(", "triangleArea2(")
-                    output = output.replace("struct Point", "struct Point2")
-
-                    output = output.replace("std::distance2(", "std::distance(")
-                    output = defs + "\n" + output
-
-                output = output.replace("dfs(", "dfs2(")
-                # output = output.replace("distance(", "distance2(")
-                # output = output.replace("triangleArea(", "triangleArea2(")
-                function_names = get_cpp_function_names(output)
-
-                # only check for repeating the same function name
-                if len(set(function_names)) == 1 and len(function_names) > 1:
-                    output = get_code_until_first_function(output)
-
-                if "bool isPowerOfTwo" not in output:
-                    isPowerOfTwo = "bool isPowerOfTwo(int x) {\nreturn (x!= 0) && ((x & (x - 1)) == 0);\n}\n"
-                    output = isPowerOfTwo + output
-
+            if self.code_opt:
+                output = check_code_compile_errors(output)
                 write_success = self.write_source(include_header+"\n"+output, src_path)
-                # write_success = self.write_source(output, src_path)
             else:
                 prompt = self.patch_prompt(prompt)
                 write_success = self.write_source(include_header+"\n"+prompt+"\n"+output, src_path)
@@ -185,12 +166,6 @@ class CppDriverWrapper(DriverWrapper):
                 print("--- PROMPT ---")
                 print(prompt)
 
-                print("--- defs ---")
-                print(defs)
-
-                print("function names")
-                print(function_names)
-
             logging.debug(f"Build result: {build_result}")
             if self.display_build_errors and build_result.stderr and not build_result.did_build:
                 logging.debug(build_result.stderr)
@@ -205,6 +180,8 @@ class CppDriverWrapper(DriverWrapper):
                     end = time.time()
                     print(f"one run time: {end - start}")
                     run_results.append(run_result)
+
+                    """
                     if run_result.is_valid and (run_result.runtime == None or run_result.runtime < 1e-6 or run_result.best_sequential_runtime / run_result.runtime > 500):
                         print(f"--- TOO FAST OUTPUT --- runtime: {run_result.runtime} ")
                         print(prompt+"\n"+output)
@@ -214,6 +191,7 @@ class CppDriverWrapper(DriverWrapper):
                         print(run_result.stderr)
                         run_result.is_valid = False
                         run_result.runtime = 0.00001
+                    """
 
                     if run_result.is_valid:
                         speedup = run_result.best_sequential_runtime / run_result.runtime
@@ -232,6 +210,7 @@ class CppDriverWrapper(DriverWrapper):
                     if self.display_runs:
                         logging.debug(run_result.stderr)
                         logging.debug(run_result.stdout)
+
                     if self.early_exit_runs and (run_result.exit_code != 0 or not run_result.is_valid):
                         break
             else:
@@ -243,64 +222,4 @@ class CppDriverWrapper(DriverWrapper):
                         logging.debug(f"Ouputs:\n\tstdout: {run_result.stdout}\n\tstderr: {run_result.stderr}")
         
         return GeneratedTextResult(write_success, build_result, run_results)
-
-
-
-# ---- Added by Ryan ----
-def get_cpp_function_names(code: str):
-    """
-    Extracts all function names from a C++ source file.
-
-    Args:
-        file_path (str): Path to the C++ file.
-
-    Returns:
-        list: A list of function names found in the file.
-    """
-    # Regular expression to match C++ function signatures
-    pattern = r'\b(\w+)\s+(\w+)\s*\([^)]*\)\s*\{'
-
-    function_names = []
-
-    # Find all matches of the regex in the file
-    matches = re.findall(pattern, code)
-
-    # Extract only the function names (second group)
-    function_names = [match[1] for match in matches]
-
-    return function_names
-
-def get_code_until_first_function(lines : str):
-    """
-    Extracts all C++ code up to and including the first function with balanced braces.
-
-    Args:
-        file_path (str): Path to the C++ file.
-
-    Returns:
-        str: The code up to and including the first function.
-    """
-
-    # Variables to track the function code and brace count
-    function_code = []
-    brace_count = 0
-    in_function = False
-
-    # Iterate over the lines to find the first function
-    for line in lines:
-        function_code.append(line)
-
-        # Check if this line marks the start of a function
-        if '{' in line:
-            brace_count += line.count('{')
-            in_function = True  # We've entered the function body
-
-        if '}' in line and in_function:
-            brace_count -= line.count('}')
-
-        # If braces are balanced, we've reached the end of the function
-        if in_function and brace_count == 0:
-            break
-
-    return ''.join(function_code)  # Join the lines into a single string
 
