@@ -13,11 +13,10 @@
 #include <iostream>
 
 constexpr int NUM_THREADS_SETUP = 32;
-// xso::rng gen[NUM_THREADS_SETUP];
 
 int get_random_bit() {
+    // thread-local since rng is not thread-safe and may potentially use many threads to create random numbers in parallel
     static thread_local xso::rng gen;
-    // return gen[omp_get_thread_num()].sample(0, 1);
     return gen.sample(0, 1);
 }
 

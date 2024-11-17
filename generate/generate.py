@@ -104,15 +104,17 @@ prompts_repeated = [p for p in prompts for _ in range(args.num_samples_per_promp
 """ Initialize HuggingFace pipeline for generation """
 # generator = pipeline(model=args.model, torch_dtype=inference_config.get_dtype(), device=0, token=args.hf_token)
 generator = pipeline(task="text-generation", model=args.model, torch_dtype=torch.bfloat16, device=0, model_kwargs = {"use_cache" : True})
+
 inference_config.init_padding(generator.tokenizer)
+
 
 """ Create a prompt data set to pass to generate method """
 if args.code_opt:
     prompt_dataset = PromptDataset([inference_config.format_prompt(p["src_code"]) for p in prompts_repeated])
 else:
-    # prompt_dataset = PromptDataset([inference_config.format_prompt(p["prompt"]) for p in prompts_repeated])
+    prompt_dataset = PromptDataset([inference_config.format_prompt(p["prompt"]) for p in prompts_repeated])
     # prompt_dataset = PromptDataset([inference_config.format_prompt(p["omp_prompt_draft"]) for p in prompts_repeated])
-    prompt_dataset = PromptDataset([inference_config.format_prompt(p["serial_prompt_draft"]) for p in prompts_repeated])
+    # prompt_dataset = PromptDataset([inference_config.format_prompt(p["serial_prompt_draft"]) for p in prompts_repeated])
 
 generated_outputs = generator(
     prompt_dataset,
@@ -146,10 +148,9 @@ for idx, (prompt, output) in tqdm(enumerate(zip(prompts_repeated, generated_outp
         if args.code_opt:
             prompt_str = cur_prompt["src_code"]
         else:
-            # prompt_str = cur_prompt["prompt"]
+            prompt_str = cur_prompt["prompt"]
             # prompt_str = cur_prompt["omp_prompt_draft"]
-            prompt_str = cur_prompt["serial_prompt_draft"]
-
+            # prompt_str = cur_prompt["serial_prompt_draft"]
 
     total_tokens += len(generator.tokenizer.encode(output[0]["generated_text"]))
     cleaned_output = inference_config.clean_output(output[0]["generated_text"], prompt_str)
