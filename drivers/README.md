@@ -62,6 +62,7 @@ python run-all.py generated-outputs.json
 #                         logging level
 #   --log-build-errors    On build error, display the stderr of the build process.
 #   --log-runs            Display the stderr and stdout of runs.
+#   --launch-configs      Use launch-configs-speedcode.json, this specifies how the executables are run.
 ```
 
 The launch configurations (node counts and launch commands) are defined in a
@@ -110,3 +111,9 @@ execute `run-all.py` on a login node without the `--dry` flag.
 
 MPI benchmarks require the correct result to be returned on rank 0. The initial
 data distribution varies by problem.
+
+### Launch Configs
+Change `launch-configs-speedcode.json` as described above to tell ParEval how to run the executable. Currently, the executables are run directly on the host machine. The launch configs used by ParEval are in `launch-configs.json`.
+
+### Problem Sizes
+Problem sizes determine the size of the input when doing evaluation. `problem-sizes-large.json` is a sample one we used to ensure that the input sizes are sufficiently large that the overhead of parallelism does not dominate. You can adjust these when running your evaluation.
