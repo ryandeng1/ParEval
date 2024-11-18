@@ -57,6 +57,16 @@ def check_code_compile_errors(output):
 
     return output
 
+def check_duplicate_function_names(output):
+    function_names = get_cpp_function_names(output)
+
+    # only check for repeating the same function name
+    # this is a hack and assumes this scenario only occurs when there is 1 function defined and repeated multiple times
+    if len(set(function_names)) == 1 and len(function_names) > 1:
+        output = get_code_until_first_function(output)
+
+    return output
+
 def build_kokkos(driver_src: PathLike, output_root: PathLike, problem_size: str = "(1<<20)"):
     """ Custom steps for the Kokkos programs, since they require cmake """
     # cp cmake file into the output directory
@@ -145,6 +155,7 @@ class CppDriverWrapper(DriverWrapper):
             include_header = "#include <bits/stdc++.h>\n#include <immintrin.h>\n"
             if self.code_opt:
                 output = check_code_compile_errors(output)
+                output = check_duplicate_function_names(output)
                 write_success = self.write_source(include_header+"\n"+output, src_path)
             else:
                 prompt = self.patch_prompt(prompt)
@@ -223,3 +234,60 @@ class CppDriverWrapper(DriverWrapper):
         
         return GeneratedTextResult(write_success, build_result, run_results)
 
+# ---- Helper functions for parsing ----
+def get_cpp_function_names(code: str):
+    """
+    Extracts all function names from a C++ source file.
+
+    Args:
+        file_path (str): Path to the C++ file.
+
+    Returns:
+        list: A list of function names found in the file.
+    """
+    # Regular expression to match C++ function signatures
+    pattern = r'\b(\w+)\s+(\w+)\s*\([^)]*\)\s*\{'
+
+    function_names = []
+
+    # Find all matches of the regex in the file
+    matches = re.findall(pattern, code)
+
+    # Extract only the function names (second group)
+    function_names = [match[1] for match in matches]
+
+    return function_names
+
+def get_code_until_first_function(lines : str):
+    """
+    Extracts all C++ code up to and including the first function with balanced braces.
+
+    Args:
+        file_path (str): Path to the C++ file.
+
+    Returns:
+        str: The code up to and including the first function.
+    """
+
+    # Variables to track the function code and brace count
+    function_code = []
+    brace_count = 0
+    in_function = False
+
+    # Iterate over the lines to find the first function
+    for line in lines:
+        function_code.append(line)
+
+        # Check if this line marks the start of a function
+        if '{' in line:
+            brace_count += line.count('{')
+            in_function = True  # We've entered the function body
+
+        if '}' in line and in_function:
+            brace_count -= line.count('}')
+
+        # If braces are balanced, we've reached the end of the function
+        if in_function and brace_count == 0:
+            break
+
+    return ''.join(function_code)  # Join the lines into a single string
