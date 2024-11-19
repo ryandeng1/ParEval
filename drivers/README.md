@@ -63,6 +63,7 @@ python run-all.py generated-outputs.json
 #   --log-build-errors    On build error, display the stderr of the build process.
 #   --log-runs            Display the stderr and stdout of runs.
 #   --launch-configs      Use launch-configs-speedcode.json, this specifies how the executables are run.
+#   --code_opt            Set to True if want to run evaluation on a Code Optimization task and False to run evaluation on a code completion task. Set this to True.
 ```
 
 The launch configurations (node counts and launch commands) are defined in a
