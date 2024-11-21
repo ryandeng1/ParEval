@@ -150,9 +150,9 @@
         "name": "30_scan_prefix_sum"
     },
     {
-        "prompt": "\n/* Apply the isPowerOfTwo function to every value in x and store the results in mask.\n   Example:\n\n   input: [8, 0, 9, 7, 15, 64, 3]\n   output: [true, false, false, false, false, true, false]\n*/\nvoid mapPowersOfTwo(std::vector<int> const& x, std::vector<bool> &mask) {\n",
+        "prompt": "/* Apply the isPowerOfTwo function to every value in x and store the results in mask.\n   Example:\n\n   input: [8, 0, 9, 7, 15, 64, 3]\n   output: [true, false, false, false, false, true, false]\n*/\nvoid mapPowersOfTwo(std::vector<int> const& x, std::vector<bool> &mask) {\n",
         "omp_prompt": "bool isPowerOfTwo(int x) {\n\treturn (x > 0) && !(x & (x - 1));\n}\n\n/* Apply the isPowerOfTwo function to every value in x and store the results in mask.\n   Use OpenMP to compute in parallel.\n   Example:\n\n   input: [8, 0, 9, 7, 15, 64, 3]\n   output: [true, false, false, false, false, true, false]\n*/\nvoid mapPowersOfTwo(std::vector<int> const& x, std::vector<bool> &mask) {",
-        "src_code": "#pragma once\n\n\n\n/* Apply the isPowerOfTwo function to every value in x and store the results in mask.\n   Example:\n   \n   input: [8, 0, 9, 7, 15, 64, 3]\n   output: [true, false, false, false, false, true, false]\n*/\nvoid mapPowersOfTwo(std::vector<int> const& x, std::vector<bool> &mask) {\n    for (int i = 0; i < x.size(); i++) {\n        mask[i] = isPowerOfTwo(x[i]);\n    }\n}",
+        "src_code": "#pragma once\n\n\n\nbool isPowerOfTwo(int x) {\n    return (x > 0) && !(x & (x - 1));\n}\n/* Apply the isPowerOfTwo function to every value in x and store the results in mask.\n   Example:\n   \n   input: [8, 0, 9, 7, 15, 64, 3]\n   output: [true, false, false, false, false, true, false]\n*/\nvoid mapPowersOfTwo(std::vector<int> const& x, std::vector<bool> &mask) {\n    for (int i = 0; i < x.size(); i++) {\n        mask[i] = isPowerOfTwo(x[i]);\n    }\n}",
         "problem_type": "transform",
         "language": "cpp",
         "parallelism_model": "serial",
