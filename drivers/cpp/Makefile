@@ -3,6 +3,7 @@ MPICXX = mpicxx
 CXX_FLAGS = -std=c++17 -O3
 Kokkos_PATH ?= ../../tpl/kokkos/build
 
+HAS_MPICXX := $(shell command -v mpicxx 2> /dev/null)
 HAS_NVCC := $(shell command -v nvcc 2> /dev/null)
 HAS_HIPCC := $(shell command -v hipcc 2> /dev/null)
 HAS_KOKKOS := $(shell test -d $(Kokkos_PATH)/lib64/ && echo "true")
@@ -29,10 +30,20 @@ all: $(ALL_DRIVERS)
 	$(CXX) $(CXX_FLAGS) -fopenmp -o $@ -c $<
 
 %mpi-driver.o: %mpi-driver.cc
+ifdef HAS_MPICXX
+	@echo "mpicxx found, compiling $(MPICXX)"
 	$(MPICXX) $(CXX_FLAGS) -o $@ -c $<
+else
+	@echo "mpicxx not found, skipping $@"
+endif
 
 %mpi-omp-driver.o: %mpi-omp-driver.cc
+ifdef HAS_MPICXX
+	@echo "mpicxx found, compiling $(MPICXX)"
 	$(MPICXX) $(CXX_FLAGS) -fopenmp -o $@ -c $<
+else
+	@echo "mpicxx not found, skipping $@"
+endif
 
 %cuda-driver.o: %cuda-driver.cu
 ifdef HAS_NVCC
