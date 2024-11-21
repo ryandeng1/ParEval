@@ -122,7 +122,7 @@ bool validate(Context *ctx) {
         correctSparseAxpy(alpha, x, y, correct);
 
         // compute test result
-        test.clear();
+        // test.clear();
         sparseAxpy(alpha, x, y, test);
         SYNC();
         

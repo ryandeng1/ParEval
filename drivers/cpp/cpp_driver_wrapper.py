@@ -36,7 +36,7 @@ DRIVER_MAP = {
 COMPILER_SETTINGS = {
     # use c++20 as fast random number generation requires it
     "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3"},
-    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -fopenmp -march=native"},
+    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -fopenmp"},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
     "mpi+omp": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
     "kokkos": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -I../tpl/kokkos/build/include ../tpl/kokkos/build/lib64/libkokkoscore.a ../tpl/kokkos/build/lib64/libkokkoscontainers.a ../tpl/kokkos/build/lib64/libkokkossimd.a"},
@@ -191,18 +191,6 @@ class CppDriverWrapper(DriverWrapper):
                     end = time.time()
                     print(f"one run time: {end - start}")
                     run_results.append(run_result)
-
-                    """
-                    if run_result.is_valid and (run_result.runtime == None or run_result.runtime < 1e-6 or run_result.best_sequential_runtime / run_result.runtime > 500):
-                        print(f"--- TOO FAST OUTPUT --- runtime: {run_result.runtime} ")
-                        print(prompt+"\n"+output)
-                        print("--- RUN RESULT STDOUT ---")
-                        print(run_result.stdout)
-                        print("--- RUN RESULT STDERR ---")
-                        print(run_result.stderr)
-                        run_result.is_valid = False
-                        run_result.runtime = 0.00001
-                    """
 
                     if run_result.is_valid:
                         speedup = run_result.best_sequential_runtime / run_result.runtime
