@@ -241,9 +241,8 @@ bool validate(Context *ctx, std::mt19937& engine) {
         correctSparseAxpy(alpha, x, y, correct);
 
         // compute test result
-        test.clear();
-
 	submission::sparseAxpy(alpha, x, y, test);
+        // test.clear();
         SYNC();
         
         bool isCorrect = true;

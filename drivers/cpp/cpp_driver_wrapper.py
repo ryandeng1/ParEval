@@ -208,9 +208,9 @@ class CppDriverWrapper(DriverWrapper):
                     print(f"one run time: {end - start}")
                     run_results.append(run_result)
 
-                    print("RUN RESULT: ", run_result)
-                    print("STDOUT: ", run_result.stdout)
-                    print("STDERR: ", run_result.stderr)
+                    # print("RUN RESULT: ", run_result)
+                    # print("STDOUT: ", run_result.stdout)
+                    # print("STDERR: ", run_result.stderr)
 
                     # exit code 0 means no runtime errors
                     if run_result.exit_code == 0 and run_result.is_valid:
