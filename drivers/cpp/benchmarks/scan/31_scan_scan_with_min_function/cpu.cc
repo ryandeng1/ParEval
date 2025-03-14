@@ -23,8 +23,13 @@ struct Context {
     std::vector<float> x;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -100.0, 100.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, -100.0, 100.0);
     BCAST(ctx->x, FLOAT);
 }
 
@@ -33,52 +38,83 @@ Context *init() {
 
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    partialMinimums(ctx->x);
+    submission::partialMinimums(ctx->x);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctPartialMinimums(ctx->x);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<float> input(TEST_SIZE), correct(TEST_SIZE), test(TEST_SIZE);
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(input.begin(), input.end(), gen);
+    // fillrand(input, -100.0, 100.0);
+    BCAST(input, FLOAT);
+
+    // compute correct result
+    correct = input;
+    correctPartialMinimums(correct);
+
+    // compute test result
+    test = input;
+    submission::partialMinimums(test);
+    sync();
+
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !fequal(correct, test, 1e-3)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
-        fillRand(input, -100.0, 100.0);
-        BCAST(input, FLOAT);
+        fillrand(input, -100.0, 100.0);
+        bcast(input, float);
 
         // compute correct result
         correct = input;
-        correctPartialMinimums(correct);
+        correctpartialminimums(correct);
 
         // compute test result
         test = input;
-        partialMinimums(test);
-        SYNC();
+	submission::partialminimums(test);
+        sync();
 
-        bool isCorrect = true;
-        if (IS_ROOT(rank) && !fequal(correct, test, 1e-3)) {
-            isCorrect = false;
+        bool iscorrect = true;
+        if (is_root(rank) && !fequal(correct, test, 1e-3)) {
+            iscorrect = false;
         }
-        BCAST_PTR(&isCorrect, 1, CXX_BOOL);
-        if (!isCorrect) {
+        bcast_ptr(&iscorrect, 1, cxx_bool);
+        if (!iscorrect) {
             return false;
         }
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

@@ -26,8 +26,13 @@ struct Context {
     std::vector<double> x;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, 0.0, 100.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, 0.0, 100.0);
     BCAST(ctx->x, DOUBLE);
 }
 
@@ -36,12 +41,12 @@ Context *init() {
 
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    double val = productWithInverses(ctx->x);
+    double val = submission::productWithInverses(ctx->x);
     (void)val;
 }
 
@@ -50,8 +55,8 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)val;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> x(TEST_SIZE);
     double test, correct;
@@ -59,6 +64,40 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
+    // fillRand(x, 0.0, 100.0);
+    BCAST(x, DOUBLE);
+
+    // compute correct result
+    correct = correctProductWithInverses(x);
+
+    // compute test result
+    test = submission::productWithInverses(x);
+    SYNC();
+
+    bool isCorrect = true;
+    if (std::isnan(test)) {
+	isCorrect = false;
+    }
+    if (IS_ROOT(rank) && std::abs(correct - test) > 1e-4) {
+        isCorrect = false;
+    }
+    if (IS_ROOT(rank) && std::isnan(correct) || std::isnan(test)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -69,7 +108,7 @@ bool validate(Context *ctx) {
         correct = correctProductWithInverses(x);
 
         // compute test result
-        test = productWithInverses(x);
+        test = submission::productWithInverses(x);
         SYNC();
 
         bool isCorrect = true;
@@ -86,6 +125,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

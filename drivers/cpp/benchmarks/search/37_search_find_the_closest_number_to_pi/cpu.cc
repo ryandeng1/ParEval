@@ -22,20 +22,25 @@ struct Context {
     std::vector<double> x;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -10000.0, 10000.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-10000.0, 10000.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, -10000.0, 10000.0);
     BCAST(ctx->x, DOUBLE);
 }
 
 Context *init() {
     Context *ctx = new Context();
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    size_t idx = findClosestToPi(ctx->x);
+    size_t idx = submission::findClosestToPi(ctx->x);
     (void)idx;
 }
 
@@ -44,12 +49,42 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)idx;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::vector<double> input(TEST_SIZE);
+    std::uniform_real_distribution<> dist(-10000.0, 10000.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(input.begin(), input.end(), gen);
+    // fillRand(input, 100.0, 1000.0);
+    // input[rand() % TEST_SIZE] = 10.0;
+    BCAST(input, DOUBLE);
+
+    // compute correct result
+    size_t correct_idx = correctFindClosestToPi(input);
+
+    // compute test result
+    size_t test_idx = submission::findClosestToPi(input);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && correct_idx != test_idx) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = 10;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -62,7 +97,7 @@ bool validate(Context *ctx) {
         size_t correct = correctFindClosestToPi(input);
 
         // compute test result
-        size_t test = findClosestToPi(input);
+        size_t test = submission::findClosestToPi(input);
         SYNC();
         
         bool isCorrect = true;
@@ -76,6 +111,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

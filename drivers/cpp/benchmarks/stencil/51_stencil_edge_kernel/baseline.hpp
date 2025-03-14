@@ -1,7 +1,7 @@
 #pragma once
 #include <vector>
 
-// const int edgeKernel[3][3] = {{-1, -1, -1}, {-1, 8, -1}, {-1, -1, -1}};
+const int edgeKernel[3][3] = {{-1, -1, -1}, {-1, 8, -1}, {-1, -1, -1}};
 
 /* Convolve the edge kernel with a grayscale image. Each pixel will be replaced with
    the dot product of itself and its neighbors with the edge kernel.

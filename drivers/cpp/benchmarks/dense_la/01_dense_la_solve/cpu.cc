@@ -24,12 +24,19 @@ struct Context {
     size_t N;
 };
 
-void createRandomLinearSystem(std::vector<double> &A, std::vector<double> &b, std::vector<double> &x, size_t N) {
-    fillRand(A, -10.0, 10.0);
-    fillRand(x, -10.0, 10.0);
+void createRandomLinearSystem(std::vector<double> &A, std::vector<double> &b, std::vector<double> &x, size_t N, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-10.0, 10.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(A.begin(), A.end(), gen);
+    std::generate(x.begin(), x.end(), gen);
+
+    // fillRand(A, -10.0, 10.0, engine);
+    // fillRand(x, -10.0, 10.0, engine);
 
     std::fill(b.begin(), b.end(), 0.0);
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
+
     for (size_t i = 0; i < N; i++) {
         for (size_t j = 0; j < N; j += 1) {
             b[i] += A[i * N + j] * x[j];
@@ -39,8 +46,8 @@ void createRandomLinearSystem(std::vector<double> &A, std::vector<double> &b, st
     std::fill(x.begin(), x.end(), 0.0);
 }
 
-void reset(Context *ctx) {
-    createRandomLinearSystem(ctx->A, ctx->b, ctx->x, ctx->N);
+void reset(Context *ctx, std::mt19937& engine) {
+    createRandomLinearSystem(ctx->A, ctx->b, ctx->x, ctx->N, engine);
 
     BCAST(ctx->A, DOUBLE);
     BCAST(ctx->b, DOUBLE);
@@ -55,20 +62,20 @@ Context *init() {
     ctx->b.resize(ctx->N);
     ctx->x.resize(ctx->N);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    solveLinearSystem(ctx->A, ctx->b, ctx->x, ctx->N);
+    submission::solveLinearSystem(ctx->A, ctx->b, ctx->x, ctx->N);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctSolveLinearSystem(ctx->A, ctx->b, ctx->x, ctx->N);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 512;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> A(TEST_SIZE * TEST_SIZE);
     std::vector<double> b(TEST_SIZE), correct(TEST_SIZE), test(TEST_SIZE);
@@ -76,10 +83,47 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    createRandomLinearSystem(A, b, correct, TEST_SIZE, engine);
+    std::fill(correct.begin(), correct.end(), 0.0);
+    std::fill(test.begin(), test.end(), 0.0);
+
+    BCAST(A, DOUBLE);
+    BCAST(b, DOUBLE);
+
+    // compute correct result
+    correctSolveLinearSystem(A, b, correct, TEST_SIZE);
+
+    // compute test result
+    submission::solveLinearSystem(A, b, test, TEST_SIZE);
+    SYNC();
+
+    std::vector<double> test_b = b;
+    std::fill(test_b.begin(), test_b.end(), 0.0);
+
+    for (size_t i = 0; i < TEST_SIZE; i++) {
+        for (size_t j = 0; j < TEST_SIZE; j++) {
+            test_b[i] += A[i * TEST_SIZE + j] * test[j];
+        }
+    }
+
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && (!fequal(b, test_b, 1e-4))) {
+        isCorrect = false;
+    }
+
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
-        createRandomLinearSystem(A, b, correct, TEST_SIZE);
+        createRandomLinearSystem(A, b, correct, TEST_SIZE, std::mt19937& engine);
         std::fill(correct.begin(), correct.end(), 0.0);
         std::fill(test.begin(), test.end(), 0.0);
 
@@ -90,7 +134,7 @@ bool validate(Context *ctx) {
         correctSolveLinearSystem(A, b, correct, TEST_SIZE);
 
         // compute test result
-        solveLinearSystem(A, b, test, TEST_SIZE);
+        submission::solveLinearSystem(ctx->A, ctx->b, ctx->x, ctx->N);
         SYNC();
         
         bool isCorrect = true;
@@ -104,6 +148,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

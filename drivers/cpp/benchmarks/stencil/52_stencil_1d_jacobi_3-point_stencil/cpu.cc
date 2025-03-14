@@ -24,8 +24,12 @@ struct Context {
     std::vector<double> input, output;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->input, -100.0, 100.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(ctx->input.begin(), ctx->input.end(), gen);
+    // fillRand(ctx->input, -100.0, 100.0);
     std::fill(ctx->output.begin(), ctx->output.end(), 0);
     BCAST(ctx->input, DOUBLE);
 }
@@ -36,26 +40,60 @@ Context *init() {
     ctx->input.resize(DRIVER_PROBLEM_SIZE);
     ctx->output.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    jacobi1D(ctx->input, ctx->output);
+    submission::jacobi1D(ctx->input, ctx->output);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctJacobi1D(ctx->input, ctx->output);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> input(TEST_SIZE), correct(TEST_SIZE), test(TEST_SIZE);
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(input.begin(), input.end(), gen);
+    // fillRand(input, -100.0, 100.0);
+    std::fill(test.begin(), test.end(), 0);
+    std::fill(correct.begin(), correct.end(), 0);
+    BCAST(input, DOUBLE);
+
+    // compute correct result
+    correctJacobi1D(input, correct);
+
+    // compute test result
+    submission::jacobi1D(input, test);
+    SYNC();
+
+    bool isCorrect = true;
+    if (IS_ROOT(rank)) {
+        for (size_t i = 1; i < TEST_SIZE-1; i++) {
+            if (std::abs(test[i] - correct[i]) > 1e-4) {
+                isCorrect = false;
+                break;
+            }
+        }
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -68,7 +106,7 @@ bool validate(Context *ctx) {
         correctJacobi1D(input, correct);
 
         // compute test result
-        jacobi1D(input, test);
+	submission::jacobi1D(input, test);
         SYNC();
 
         bool isCorrect = true;
@@ -87,6 +125,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

@@ -24,16 +24,28 @@ struct Context {
     std::vector<int> x;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, 1, 20);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(1, 20);
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+
+    // fillRand(ctx->x, 1, 20);
     for (int i = 0; i < ctx->x.size(); i += 1) {
         ctx->x[i] = 2 * ctx->x[i] + 1;  // make everything odd
     }
     // make two values in the middle quadrants even
-    size_t min = ctx->x.size() / 4;
-    size_t max = 3 * ctx->x.size() / 4;
-    ctx->x[rand() % (max - min) + min] += 1;
-    ctx->x[rand() % (max - min) + min] += 1;
+    // size_t min = ctx->x.size() / 4;
+    // size_t max = 3 * ctx->x.size() / 4;
+    // ctx->x[rand() % (max - min) + min] += 1;
+    // ctx->x[rand() % (max - min) + min] += 1;
+
+    std::uniform_int_distribution<> idx_dist(ctx->x.size() / 4, ctx->x.size() * 3 / 4);
+    for (int i = 0; i < ctx->x.size() / 8; i++) {
+	int idx = idx_dist(engine);
+        ctx->x[idx] += 1;
+    }
+
     BCAST(ctx->x, INT);
 }
 
@@ -42,12 +54,12 @@ Context *init() {
 
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    size_t idx = findFirstEven(ctx->x);
+    size_t idx = submission::findFirstEven(ctx->x);
     (void)idx;
 }
 
@@ -56,12 +68,51 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)idx;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::vector<int> x(DRIVER_PROBLEM_SIZE);
+    std::uniform_int_distribution<> dist(1, 20);
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
+
+    // fillRand(ctx->x, 1, 20);
+    for (int i = 0; i < x.size(); i += 1) {
+        x[i] = 2 * x[i] + 1;  // make everything odd
+    }
+
+    std::uniform_int_distribution<> idx_dist(x.size() / 4, x.size() * 3 / 4);
+    for (int i = 0; i < x.size() / 8; i++) {
+	int idx = idx_dist(engine);
+        x[idx] += 1;
+    }
+
+    BCAST(x, INT);
+
+    // compute correct result
+    size_t correct_idx = correctFindFirstEven(x);
+
+    // compute test result
+    size_t test_idx = submission::findFirstEven(x);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && correct_idx != test_idx) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = 10;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -78,7 +129,7 @@ bool validate(Context *ctx) {
         size_t correct = correctFindFirstEven(x);
 
         // compute test result
-        size_t test = findFirstEven(x);
+        size_t test = submission::findFirstEven(x);
         SYNC();
         
         bool isCorrect = true;
@@ -92,6 +143,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

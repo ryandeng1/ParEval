@@ -23,9 +23,15 @@ struct Context {
     std::vector<double> real, imag;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->real, -100.0, 100.0);
-    fillRand(ctx->imag, -100.0, 100.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->real.begin(), ctx->real.end(), gen);
+    std::generate(ctx->imag.begin(), ctx->imag.end(), gen);
+    // fillRand(ctx->real, -100.0, 100.0);
+    // fillRand(ctx->imag, -100.0, 100.0);
     BCAST(ctx->real, DOUBLE);
     BCAST(ctx->imag, DOUBLE);
 
@@ -41,20 +47,20 @@ Context *init() {
     ctx->real.resize(ctx->x.size());
     ctx->imag.resize(ctx->x.size());
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    sortComplexByMagnitude(ctx->x);
+    submission::sortComplexByMagnitude(ctx->x);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctSortComplexByMagnitude(ctx->x);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> real(TEST_SIZE), imag(TEST_SIZE);
     std::vector<std::complex<double>> correct(TEST_SIZE), test(TEST_SIZE);
@@ -62,6 +68,46 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(real.begin(), real.end(), gen);
+    std::generate(imag.begin(), imag.end(), gen);
+    // fillRand(real, -100.0, 100.0);
+    // fillRand(imag, -100.0, 100.0);
+    BCAST(real, DOUBLE);
+    BCAST(imag, DOUBLE);
+
+    for (int i = 0; i < correct.size(); i += 1) {
+        correct[i] = std::complex<double>(real[i], imag[i]);
+        test[i] = std::complex<double>(real[i], imag[i]);
+    }
+
+    // compute correct result
+    correctSortComplexByMagnitude(correct);
+
+    // compute test result
+    submission::sortComplexByMagnitude(test);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank)) {
+        for (int i = 0; i < correct.size(); i += 1) {
+            if (std::abs(correct[i] - test[i]) > 1e-6) {
+                isCorrect = false;
+                break;
+            }
+        }
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -79,7 +125,7 @@ bool validate(Context *ctx) {
         correctSortComplexByMagnitude(correct);
 
         // compute test result
-        sortComplexByMagnitude(test);
+	submission::sortComplexByMagnitude(test);
         SYNC();
         
         bool isCorrect = true;
@@ -98,6 +144,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

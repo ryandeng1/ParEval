@@ -221,8 +221,6 @@ class DriverWrapper(ABC):
 
     def test_all_outputs_in_prompt(self, prompt: dict) -> dict:
         """ Run all the generated outputs in the given prompt. """
-        print("prompt")
-        print(prompt.keys())
         root = prompt["language"]
         type = prompt["problem_type"]
         name = prompt["name"]

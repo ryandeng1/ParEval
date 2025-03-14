@@ -24,12 +24,38 @@ struct Context {
     std::vector<std::string> titles;
 };
 
-void reset(Context *ctx) {
-    fillRandString(ctx->titles, 5, 15);
-    fillRand(ctx->pages, 101, 1000);
-    size_t min = 0;
-    size_t max = ctx->pages.size() / 4;
-    ctx->pages[rand() % (max - min) + min] = 72;  // make sure there is at least one book with < 100 pages
+void reset(Context *ctx, std::mt19937& engine) {
+    /* for this it doesn't matter if every process has the same data */
+    // const std::string characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    const std::string characters = "abcdefghijklmnopqrstuvwxyz";
+    std::uniform_int_distribution<> char_dist(0, 25);
+    std::uniform_int_distribution<> len_dist(5, 15);
+    auto gen = [&](){
+	auto len = char_dist(engine);
+	std::string randomString;
+        for (int i = 0; i < len; i++) {
+            randomString += characters[char_dist(engine)];
+        }
+	return randomString;
+    };
+
+    std::generate(ctx->titles.begin(), ctx->titles.end(), gen);
+
+    std::uniform_int_distribution<> dist(1, 1e6);
+    auto gen_pages = [&](){
+	return dist(engine);
+    };
+
+    std::generate(ctx->pages.begin(), ctx->pages.end(), gen_pages);
+
+    std::uniform_int_distribution<> dist_idx(0, ctx->pages.size() - 1);
+
+    // fillRandString(ctx->titles, 5, 15);
+    // fillRand(ctx->pages, 101, 1000);
+    // size_t min = 0;
+    // size_t max = ctx->pages.size() / 4;
+    // ctx->pages[rand() % (max - min) + min] = 72;  // make sure there is at least one book with < 100 pages
+    ctx->pages[dist_idx(engine)] = 72;
     BCAST(ctx->pages, INT);
 
     for (int i = 0; i < ctx->books.size(); i += 1) {
@@ -43,12 +69,12 @@ Context *init() {
     ctx->books.resize(DRIVER_PROBLEM_SIZE);
     ctx->pages.resize(DRIVER_PROBLEM_SIZE);
     ctx->titles.resize(DRIVER_PROBLEM_SIZE);
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    size_t idx = findLastShortBook(ctx->books);
+    size_t idx = submission::findLastShortBook(ctx->books);
     (void)idx;
 }
 
@@ -57,11 +83,58 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)idx;
 }
 
-bool validate(Context *ctx) {
-
+bool validate(Context *ctx, std::mt19937& engine) {
     int rank;
     GET_RANK(rank);
 
+    std::vector<int> pages(DRIVER_PROBLEM_SIZE);
+    std::vector<Book> input(DRIVER_PROBLEM_SIZE);
+
+    std::uniform_int_distribution<> dist(1, 1e6);
+    auto gen_pages = [&](){
+	return dist(engine);
+    };
+
+    std::generate(pages.begin(), pages.end(), gen_pages);
+
+    std::uniform_int_distribution<> dist_idx(0, pages.size() - 1);
+
+    // fillRandString(ctx->titles, 5, 15);
+    // fillRand(ctx->pages, 101, 1000);
+    // size_t min = 0;
+    // size_t max = ctx->pages.size() / 4;
+    // ctx->pages[rand() % (max - min) + min] = 72;  // make sure there is at least one book with < 100 pages
+    pages[dist_idx(engine)] = 72;
+
+    // fillRand(pages, 1, 1000);
+    // pages[rand() % pages.size()] = 72;  // make sure there is at least one book with < 100 pages
+    BCAST(pages, INT);
+    for (int j = 0; j < input.size(); j += 1) {
+        input[j].title = "title";
+        input[j].pages = pages[j];
+    }
+
+    // compute correct result
+    size_t correctIdx = correctFindLastShortBook(input);
+
+    assert(input[correctIdx].pages < 100);
+
+    // compute test result
+    size_t testIdx = submission::findLastShortBook(input);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && correctIdx != testIdx) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = 5;
     for (int i = 0; i < numTries; i += 1) {
         std::vector<int> pages(1024);
@@ -78,7 +151,7 @@ bool validate(Context *ctx) {
         size_t correctIdx = correctFindLastShortBook(input);
 
         // compute test result
-        size_t testIdx = findLastShortBook(input);
+        size_t testIdx = submission::findLastShortBook(input);
         SYNC();
         
         bool isCorrect = true;
@@ -92,6 +165,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

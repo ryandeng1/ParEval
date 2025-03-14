@@ -1,10 +1,12 @@
 #pragma once
 #include <vector>
 
-// struct COOElement {
-//    size_t row, column;
-//    double value;
-// };
+/*
+struct COOElement {
+   size_t row, column;
+   double value;
+};
+*/
 
 /* Solve the sparse linear system Ax=b for x.
    A is a sparse NxN matrix in COO format. x and b are dense vectors with N elements.

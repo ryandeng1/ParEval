@@ -26,9 +26,24 @@ struct Context {
     int target;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -50, 50);
-    ctx->target = (rand() % 200) - 100;
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(-1e6, 1e6);
+    auto gen = [&](){ return dist(engine); };
+
+    std::uniform_int_distribution<> rand_bit_dist(0, 1);
+    auto rand_bit = rand_bit_dist(engine);
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    if (rand_bit) {
+        std::uniform_int_distribution<> idx_dist(0, ctx->x.size() - 1);
+	auto rand_idx = idx_dist(engine);
+	ctx->target = ctx->x[rand_idx];
+    } else {
+	ctx->target = 1e6 + 1;
+    }
+
+    // fillRand(ctx->x, -50, 50);
+    // ctx->target = (rand() % 200) - 100;
     BCAST(ctx->x, INT);
     BCAST_PTR(&ctx->target, 1, INT);
 }
@@ -36,12 +51,12 @@ void reset(Context *ctx) {
 Context *init() {
     Context *ctx = new Context();
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    size_t idx = contains(ctx->x, ctx->target);
+    size_t idx = submission::contains(ctx->x, ctx->target);
     (void)idx;
 }
 
@@ -50,11 +65,63 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)idx;
 }
 
-bool validate(Context *ctx) {
-
+bool validate(Context *ctx, std::mt19937& engine) {
     int rank;
     GET_RANK(rank);
 
+    std::vector<int> input(DRIVER_PROBLEM_SIZE);
+
+    std::uniform_int_distribution<> dist(-1e6, 1e6);
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(input.begin(), input.end(), gen);
+    std::uniform_int_distribution<> idx_dist(0, ctx->x.size() - 1);
+    auto rand_idx = idx_dist(engine);
+
+    // target not in list
+    int target = 1e6 + 1;
+    BCAST(input, INT);
+    BCAST_PTR(&target, 1, INT);
+
+    // compute correct result
+    size_t correctIdx = correctContains(input, target);
+
+    // compute test result
+    size_t testIdx = submission::contains(input, target);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && correctIdx != testIdx) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    // target is in list
+    target = input[rand_idx];
+    BCAST(input, INT);
+    BCAST_PTR(&target, 1, INT);
+
+    // compute correct result
+    correctIdx = correctContains(input, target);
+
+    // compute test result
+    testIdx = submission::contains(input, target);
+    SYNC();
+        
+    if (IS_ROOT(rank) && correctIdx != testIdx) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = 10;
     for (int i = 0; i < numTries; i += 1) {
         std::vector<int> input(1024);
@@ -72,7 +139,7 @@ bool validate(Context *ctx) {
         size_t correctIdx = correctContains(input, target);
 
         // compute test result
-        size_t testIdx = contains(input, target);
+        size_t testIdx = submission::contains(input, target);
         SYNC();
         
         bool isCorrect = true;
@@ -86,6 +153,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

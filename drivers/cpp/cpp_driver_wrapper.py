@@ -36,7 +36,7 @@ DRIVER_MAP = {
 COMPILER_SETTINGS = {
     # use c++20 as fast random number generation requires it
     "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3"},
-    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -fopenmp -march=native"},
+    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -g -fopenmp -march=native"},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
     "mpi+omp": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
     "kokkos": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -I../tpl/kokkos/build/include ../tpl/kokkos/build/lib64/libkokkoscore.a ../tpl/kokkos/build/lib64/libkokkoscontainers.a ../tpl/kokkos/build/lib64/libkokkossimd.a"},
@@ -44,28 +44,46 @@ COMPILER_SETTINGS = {
     "hip": {"CXX": "hipcc", "CXXFLAGS": "-std=c++17 -O3 -Xcompiler \"-std=c++17\" -Xcompiler \"-O3\" -Wno-unused-result"}
 }
 
-# There are certain problems that don't play nice with code optimization.
-# baseline code sometimes defines helper functions that will conflict with a LLM's output.
-# This only affects a few problems below, so this is a quick and dirty hack to solve some compiler errors that arise for these problems.
-def check_code_compile_errors(output):
-    if "dfs(" in output:
-        output = output.replace("dfs(", "dfs_helper(")
+def wrap_with_namespace_gpt(code: str, namespace="submission") -> str:
+    lines = code.splitlines(keepends=True)  # Keep line endings intact
 
-    if "void fft(std::vector<std::complex<double>> &x)" in output:
-        output = output.replace("fft(", "fft_helper(")
-        output = output.replace("ifft_helper(", "ifft(")
+    in_struct = False
+    struct_indent = None
+    output = []
+    namespace_code = []
 
-    return output
+    for line in lines:
+        stripped = line.lstrip()
 
-def check_duplicate_function_names(output):
-    function_names = get_cpp_function_names(output)
+        # Exclude headers, macros, and using statements from the namespace
+        if stripped.startswith(("#include", "#define", "using ", "#pragma once", "#if", "#endif")):
+            output.append(line)
+            continue
 
-    # only check for repeating the same function name
-    # this is a hack and assumes this scenario only occurs when there is 1 function defined and repeated multiple times
-    if len(set(function_names)) == 1 and len(function_names) > 1:
-        output = get_code_until_first_function(output)
+        # Detect struct start (avoid struct keywords in comments)
+        if re.match(r'^\s*struct\s+\w+', stripped) and not stripped.startswith("//"):
+            in_struct = True
+            struct_indent = len(line) - len(stripped)
+            output.append(line)
+            continue
 
-    return output
+        # Detect struct end (based on indentation)
+        if in_struct and struct_indent is not None:
+            if len(line) - len(line.lstrip()) <= struct_indent and stripped != "":
+                in_struct = False
+            output.append(line)
+            continue
+
+        # Everything else goes inside the namespace
+        namespace_code.append(line)
+
+    # Wrap non-struct code in the namespace
+    if namespace_code:
+        output.append(f"namespace {namespace} {{\n")
+        output.extend(["    " + line if line.strip() else line for line in namespace_code])
+        output.append(f"}} // namespace {namespace}\n")
+
+    return "".join(output)
 
 def build_kokkos(driver_src: PathLike, output_root: PathLike, problem_size: str = "(1<<20)"):
     """ Custom steps for the Kokkos programs, since they require cmake """
@@ -152,11 +170,11 @@ class CppDriverWrapper(DriverWrapper):
             src_path = os.path.join(tmpdir, f"generated-code.{src_ext}")
 
             # include the entire C++ standard library as well as header for vectorization
-            include_header = "#include <bits/stdc++.h>\n#include <immintrin.h>\n"
+            include_header = "#pragma once\n#include <bits/stdc++.h>\n#include <immintrin.h>\n"
             if self.code_opt:
-                output = check_code_compile_errors(output)
-                output = check_duplicate_function_names(output)
-                write_success = self.write_source(include_header+"\n"+output, src_path)
+                output_with_extra_headers = include_header + "\n" + output
+                output_with_namespace = wrap_with_namespace_gpt(output_with_extra_headers)
+                write_success = self.write_source(output_with_namespace, src_path)
             else:
                 prompt = self.patch_prompt(prompt)
                 write_success = self.write_source(include_header+"\n"+prompt+"\n"+output, src_path)
@@ -167,15 +185,13 @@ class CppDriverWrapper(DriverWrapper):
             exec_path = os.path.join(tmpdir, "a.out")
             compiler_kwargs = copy.deepcopy(COMPILER_SETTINGS[self.parallelism_model])
             compiler_kwargs["problem_size"] = problem_size  # for kokkos
-            compiler_kwargs["CXXFLAGS"] += f" -I{tmpdir} -DDRIVER_PROBLEM_SIZE=\"{problem_size}\""
+            compiler_kwargs["CXXFLAGS"] += f" -I{tmpdir} -DDRIVER_PROBLEM_SIZE=\"{problem_size}\" -I{os.path.dirname(test_driver_file)}"
             build_result = self.compile(self.model_driver_file, test_driver_file, output_path=exec_path, **compiler_kwargs)
+
             if build_result.exit_code != 0:
                 print(f"----- DID NOT BUILD ---- build result stderr: {build_result.stderr}")
-                print("--- CODE FILE ---")
-                print(output)
-
-                print("--- PROMPT ---")
-                print(prompt)
+                print("--- CODE ---")
+                print(output_with_namespace)
 
             logging.debug(f"Build result: {build_result}")
             if self.display_build_errors and build_result.stderr and not build_result.did_build:
@@ -192,31 +208,16 @@ class CppDriverWrapper(DriverWrapper):
                     print(f"one run time: {end - start}")
                     run_results.append(run_result)
 
-                    """
-                    if run_result.is_valid and (run_result.runtime == None or run_result.runtime < 1e-6 or run_result.best_sequential_runtime / run_result.runtime > 500):
-                        print(f"--- TOO FAST OUTPUT --- runtime: {run_result.runtime} ")
-                        print(prompt+"\n"+output)
-                        print("--- RUN RESULT STDOUT ---")
-                        print(run_result.stdout)
-                        print("--- RUN RESULT STDERR ---")
-                        print(run_result.stderr)
-                        run_result.is_valid = False
-                        run_result.runtime = 0.00001
-                    """
+                    print("RUN RESULT: ", run_result)
+                    print("STDOUT: ", run_result.stdout)
+                    print("STDERR: ", run_result.stderr)
 
-                    if run_result.is_valid:
+                    # exit code 0 means no runtime errors
+                    if run_result.exit_code == 0 and run_result.is_valid:
                         speedup = run_result.best_sequential_runtime / run_result.runtime
                         print(f"valid run runtime: {run_result.runtime}, best sequential runtime: {run_result.best_sequential_runtime}, speedup: {run_result.best_sequential_runtime / run_result.runtime}")
-                        if speedup > 20:
-                            print("--- FAST OUTPUT ---")
-                            print(prompt+"\n"+output)
-                            print("--- RUN RESULT STDOUT ---")
-                            print(run_result.stdout)
-                            print("--- RUN RESULT STDERR ---")
-                            print(run_result.stderr)
                     else:
                         print("--- INCORRECT ---")
-                        print(run_result.stdout)
 
                     if self.display_runs:
                         logging.debug(run_result.stderr)
@@ -234,60 +235,3 @@ class CppDriverWrapper(DriverWrapper):
         
         return GeneratedTextResult(write_success, build_result, run_results)
 
-# ---- Helper functions for parsing ----
-def get_cpp_function_names(code: str):
-    """
-    Extracts all function names from a C++ source file.
-
-    Args:
-        file_path (str): Path to the C++ file.
-
-    Returns:
-        list: A list of function names found in the file.
-    """
-    # Regular expression to match C++ function signatures
-    pattern = r'\b(\w+)\s+(\w+)\s*\([^)]*\)\s*\{'
-
-    function_names = []
-
-    # Find all matches of the regex in the file
-    matches = re.findall(pattern, code)
-
-    # Extract only the function names (second group)
-    function_names = [match[1] for match in matches]
-
-    return function_names
-
-def get_code_until_first_function(lines : str):
-    """
-    Extracts all C++ code up to and including the first function with balanced braces.
-
-    Args:
-        file_path (str): Path to the C++ file.
-
-    Returns:
-        str: The code up to and including the first function.
-    """
-
-    # Variables to track the function code and brace count
-    function_code = []
-    brace_count = 0
-    in_function = False
-
-    # Iterate over the lines to find the first function
-    for line in lines:
-        function_code.append(line)
-
-        # Check if this line marks the start of a function
-        if '{' in line:
-            brace_count += line.count('{')
-            in_function = True  # We've entered the function body
-
-        if '}' in line and in_function:
-            brace_count -= line.count('}')
-
-        # If braces are balanced, we've reached the end of the function
-        if in_function and brace_count == 0:
-            break
-
-    return ''.join(function_code)  # Join the lines into a single string

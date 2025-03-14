@@ -36,8 +36,12 @@ struct Context {
     size_t N;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->input, 0, 2);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(0, 1);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(ctx->input.begin(), ctx->input.end(), gen);
+    // fillRand(ctx->input, 0, 2);
     std::fill(ctx->output.begin(), ctx->output.end(), 0);
     BCAST(ctx->input, INT);
 }
@@ -49,26 +53,65 @@ Context *init() {
     ctx->input.resize(ctx->N * ctx->N);
     ctx->output.resize(ctx->N * ctx->N);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    gameOfLife(ctx->input, ctx->output, ctx->N);
+    submission::gameOfLife(ctx->input, ctx->output, ctx->N);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctGameOfLife(ctx->input, ctx->output, ctx->N);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<int> input(TEST_SIZE * TEST_SIZE), correct(TEST_SIZE * TEST_SIZE), test(TEST_SIZE * TEST_SIZE);
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_int_distribution<> dist(0, 1);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(input.begin(), input.end(), gen);
+    // fillRand(input, 0, 2);
+    std::fill(test.begin(), test.end(), 0);
+    std::fill(correct.begin(), correct.end(), 0);
+    BCAST(input, INT);
+
+    // compute correct result
+    correctGameOfLife(input, correct, TEST_SIZE);
+
+    // compute test result
+    submission::gameOfLife(input, test, TEST_SIZE);
+    SYNC();
+
+    bool isCorrect = true;
+    if (IS_ROOT(rank)) {
+        for (size_t i = 1; i < TEST_SIZE-1; i += 1) {
+            for (size_t j = 1; j < TEST_SIZE-1; j += 1) {
+                if (test[i * TEST_SIZE + j] != correct[i * TEST_SIZE + j]) {
+                    isCorrect = false;
+                    break;
+                }
+            }
+            if (!isCorrect) {
+                break;
+            }
+        }
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -81,7 +124,7 @@ bool validate(Context *ctx) {
         correctGameOfLife(input, correct, TEST_SIZE);
 
         // compute test result
-        gameOfLife(input, test, TEST_SIZE);
+	submission::gameOfLife(input, test, TEST_SIZE);
         SYNC();
 
         bool isCorrect = true;
@@ -105,6 +148,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

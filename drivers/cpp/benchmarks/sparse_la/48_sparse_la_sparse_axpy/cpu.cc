@@ -32,12 +32,48 @@ struct Context {
     size_t N;
 };
 
-void reset(Context *ctx) {
-    ctx->alpha = (rand() / (double) RAND_MAX) * 2.0 - 1.0;
-    fillRand(ctx->xIndices, 0UL, ctx->N);
-    fillRand(ctx->yIndices, 0UL, ctx->N);
-    fillRand(ctx->xValues, -1.0, 1.0);
-    fillRand(ctx->yValues, -1.0, 1.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> prob_dist(0.0, 1.0);
+    std::uniform_real_distribution<> val_dist(-1.0, 1.0);
+
+    auto prob_gen = [&](){ return prob_dist(engine); };
+    auto val_gen = [&](){ return val_dist(engine); };
+
+    ctx->xIndices.clear();
+    ctx->xValues.clear();
+    for (size_t i = 0; i < ctx->N; i++) {
+	auto prob = prob_gen();
+	if (prob > SPARSE_LA_SPARSITY) {
+	    continue;
+	}
+
+	auto value = val_gen();
+	ctx->xIndices.push_back(i);
+	ctx->xValues.push_back(value);
+    }
+    ctx->x.resize(ctx->xIndices.size());
+
+    ctx->yIndices.clear();
+    ctx->yValues.clear();
+    for (size_t i = 0; i < ctx->N; i++) {
+	auto prob = prob_gen();
+	if (prob > SPARSE_LA_SPARSITY) {
+	    continue;
+	}
+
+	auto value = val_gen();
+	ctx->yIndices.push_back(i);
+	ctx->yValues.push_back(value);
+    }
+    ctx->y.resize(ctx->yIndices.size());
+
+    ctx->alpha = val_gen();
+
+    // ctx->alpha = (rand() / (double) RAND_MAX) * 2.0 - 1.0;
+    // fillRand(ctx->xIndices, 0UL, ctx->N);
+    // fillRand(ctx->yIndices, 0UL, ctx->N);
+    // fillRand(ctx->xValues, -1.0, 1.0);
+    // fillRand(ctx->yValues, -1.0, 1.0);
 
     BCAST_PTR(&ctx->alpha, 1, DOUBLE);
     BCAST(ctx->xIndices, UNSIGNED_LONG);
@@ -47,6 +83,9 @@ void reset(Context *ctx) {
 
     for (int i = 0; i < ctx->xIndices.size(); i += 1) {
         ctx->x[i] = {ctx->xIndices[i], ctx->xValues[i]};
+        // ctx->y[i] = {ctx->yIndices[i], ctx->yValues[i]};
+    }
+    for (int i = 0; i < ctx->yIndices.size(); i += 1) {
         ctx->y[i] = {ctx->yIndices[i], ctx->yValues[i]};
     }
     std::sort(ctx->x.begin(), ctx->x.end(), [](Element const& a, Element const& b) { return a.index < b.index; });
@@ -69,20 +108,20 @@ Context *init() {
 
     ctx->z.resize(ctx->N);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    sparseAxpy(ctx->alpha, ctx->x, ctx->y, ctx->z);
+    submission::sparseAxpy(ctx->alpha, ctx->x, ctx->y, ctx->z);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctSparseAxpy(ctx->alpha, ctx->x, ctx->y, ctx->z);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
     const size_t nVals = TEST_SIZE * SPARSE_LA_SPARSITY;
 
     std::vector<Element> x(nVals), y(nVals);
@@ -93,6 +132,86 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    std::uniform_real_distribution<> prob_dist(0.0, 1.0);
+    std::uniform_real_distribution<> val_dist(-1.0, 1.0);
+
+    auto prob_gen = [&](){ return prob_dist(engine); };
+    auto val_gen = [&](){ return val_dist(engine); };
+
+    xIndices.clear();
+    xValues.clear();
+    for (size_t i = 0; i < TEST_SIZE; i++) {
+	auto prob = prob_gen();
+	if (prob > SPARSE_LA_SPARSITY) {
+	    continue;
+	}
+
+	auto value = val_gen();
+	xIndices.push_back(i);
+	xValues.push_back(value);
+    }
+    x.resize(xIndices.size());
+
+    yIndices.clear();
+    yValues.clear();
+    for (size_t i = 0; i < TEST_SIZE; i++) {
+	auto prob = prob_gen();
+	if (prob > SPARSE_LA_SPARSITY) {
+	    continue;
+	}
+
+	auto value = val_gen();
+	yIndices.push_back(i);
+	yValues.push_back(value);
+    }
+    y.resize(yIndices.size());
+
+    double alpha = val_gen();
+
+    // double alpha = (rand() / (double) RAND_MAX) * 2.0 - 1.0;
+    // fillRand(xIndices, 0UL, TEST_SIZE);
+    // fillRand(yIndices, 0UL, TEST_SIZE);
+    // fillRand(xValues, -1.0, 1.0);
+    // fillRand(yValues, -1.0, 1.0);
+
+    BCAST_PTR(&alpha, 1, DOUBLE);
+    BCAST(xIndices, UNSIGNED_LONG);
+    BCAST(yIndices, UNSIGNED_LONG);
+    BCAST(xValues, DOUBLE);
+    BCAST(yValues, DOUBLE);
+
+    for (int i = 0; i < xIndices.size(); i += 1) {
+        x[i] = {xIndices[i], xValues[i]};
+        // y[i] = {yIndices[i], yValues[i]};
+    }
+    for (int i = 0; i < yIndices.size(); i += 1) {
+        y[i] = {yIndices[i], yValues[i]};
+    }
+    std::sort(x.begin(), x.end(), [](Element const& a, Element const& b) { return a.index < b.index; });
+    std::sort(y.begin(), y.end(), [](Element const& a, Element const& b) { return a.index < b.index; });
+
+    std::fill(correct.begin(), correct.end(), 0.0);
+    std::fill(test.begin(), test.end(), 0.0);
+
+    // compute correct result
+    correctSparseAxpy(alpha, x, y, correct);
+
+    // compute test result
+    submission::sparseAxpy(alpha, x, y, test);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !fequal(correct, test, 1e-4)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -123,7 +242,8 @@ bool validate(Context *ctx) {
 
         // compute test result
         test.clear();
-        sparseAxpy(alpha, x, y, test);
+
+	submission::sparseAxpy(alpha, x, y, test);
         SYNC();
         
         bool isCorrect = true;
@@ -137,6 +257,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

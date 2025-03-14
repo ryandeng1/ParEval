@@ -27,10 +27,31 @@ struct Context {
     int val;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -10000, 10000);
-    fillRand(ctx->y, -10000, 10000);
-    ctx->val = rand() % 1000;
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(-1e6, 1e6);
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    std::generate(ctx->y.begin(), ctx->y.end(), gen);
+
+    std::uniform_int_distribution<> rand_bit_dist(0, 1);
+    auto rand_bit = rand_bit_dist(engine);
+
+    if (rand_bit) {
+        std::uniform_int_distribution<> idx_dist(0, ctx->x.size() - 1);
+	auto rand_idx_x = idx_dist(engine);
+	auto rand_idx_y = idx_dist(engine);
+	auto rand_value = dist(engine);
+	ctx->x[rand_idx_x] = rand_value;
+	ctx->y[rand_idx_y] = rand_value;
+	ctx->val = rand_value;
+    } else {
+	ctx->val = dist(engine);
+    }
+
+    // fillRand(ctx->x, -10000, 10000);
+    // fillRand(ctx->y, -10000, 10000);
+    // ctx->val = rand() % 1000;
 
     BCAST(ctx->x, INT);
     BCAST(ctx->y, INT);
@@ -43,12 +64,12 @@ Context *init() {
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
     ctx->y.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    bool found = xorContains(ctx->x, ctx->y, ctx->val);
+    bool found = submission::xorContains(ctx->x, ctx->y, ctx->val);
     (void)found;
 }
 
@@ -57,12 +78,74 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)found;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::vector<int> x(TEST_SIZE);
+    std::vector<int> y(TEST_SIZE);
+
+    std::uniform_int_distribution<> dist(-1e6, 1e6);
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
+    std::generate(y.begin(), y.end(), gen);
+
+    std::uniform_int_distribution<> idx_dist(0, TEST_SIZE - 1);
+    auto rand_idx_x = idx_dist(engine);
+    auto rand_idx_y = idx_dist(engine);
+    auto rand_value = dist(engine);
+    x[rand_idx_x] = rand_value;
+    y[rand_idx_y] = rand_value;
+    int val = rand_value;
+
+    // fillRand(x, -100, 100);
+    // fillRand(y, -100, 100);
+    // int val = rand() % 200 - 100;
+    BCAST(x, INT);
+    BCAST(y, INT);
+    BCAST_PTR(&val, 1, INT);
+
+    // compute correct result
+    bool correct = correctXorContains(x, y, val);
+
+    // compute test result
+    bool test = submission::xorContains(x, y, val);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && test != correct) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    val = dist(engine);
+    BCAST_PTR(&val, 1, INT);
+
+    // compute correct result
+    correct = correctXorContains(x, y, val);
+
+    // compute test result
+    test = submission::xorContains(x, y, val);
+    SYNC();
+        
+    if (IS_ROOT(rank) && test != correct) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = 10;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -83,7 +166,7 @@ bool validate(Context *ctx) {
         bool correct = correctXorContains(x, y, val);
 
         // compute test result
-        bool test = xorContains(x, y, val);
+        bool test = submission::xorContains(x, y, val);
         SYNC();
         
         bool isCorrect = true;
@@ -97,6 +180,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

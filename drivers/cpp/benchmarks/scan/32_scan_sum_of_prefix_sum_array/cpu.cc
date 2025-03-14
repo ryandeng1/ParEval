@@ -24,8 +24,13 @@ struct Context {
     std::vector<double> x;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -100.0, 100.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, -100.0, 100.0);
     BCAST(ctx->x, DOUBLE);
 }
 
@@ -34,12 +39,12 @@ Context *init() {
 
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    double val = sumOfPrefixSum(ctx->x);
+    double val = submission::sumOfPrefixSum(ctx->x);
     (void) val;
 }
 
@@ -48,14 +53,46 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void) val;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> input(TEST_SIZE);
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(input.begin(), input.end(), gen);
+    // fillRand(input, -100.0, 100.0);
+    BCAST(input, DOUBLE);
+
+    // compute correct result
+    double correctResult = correctSumOfPrefixSum(input);
+
+    // compute test result
+    double testResult = submission::sumOfPrefixSum(input);
+    SYNC();
+
+    bool isCorrect = true;
+    if (std::isnan(testResult)) {
+	isCorrect = false;
+    }
+
+    if (IS_ROOT(rank) && std::fabs(correctResult - testResult) > 1e-5) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -66,7 +103,7 @@ bool validate(Context *ctx) {
         double correctResult = correctSumOfPrefixSum(input);
 
         // compute test result
-        double testResult = sumOfPrefixSum(input);
+        double testResult = submission::sumOfPrefixSum(input);
         SYNC();
 
         bool isCorrect = true;
@@ -84,6 +121,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

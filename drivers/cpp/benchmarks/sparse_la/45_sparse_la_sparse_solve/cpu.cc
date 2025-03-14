@@ -39,11 +39,38 @@ void sortCOOElements(std::vector<COOElement> &vec) {
 }
 
 void createRandomLinearSystem(std::vector<COOElement> &A, std::vector<size_t> &A_rows, std::vector<size_t> &A_columns, 
-    std::vector<double> &A_values, std::vector<double> &b, std::vector<double> &x, size_t N) {
-    
-    fillRand(A_rows, 0UL, N);
-    fillRand(A_columns, 0UL, N);
-    fillRand(A_values, -10.0, 10.0);
+    std::vector<double> &A_values, std::vector<double> &b, std::vector<double> &x, size_t N, std::mt19937& engine) {
+
+    std::uniform_real_distribution<> prob_dist(0.0, 1.0);
+    std::uniform_real_distribution<> val_dist(-10.0, 10.0);
+
+    auto prob_gen = [&](){ return prob_dist(engine); };
+    auto val_gen = [&](){ return val_dist(engine); };
+
+    A.clear();
+    A_rows.clear();
+    A_columns.clear();
+    A_values.clear();
+
+    for (size_t i = 0; i < N; i++) {
+	for (int j = 0; j < N; j++) {
+	    auto prob = prob_gen();
+	    if (prob > SPARSE_LA_SPARSITY) {
+	        continue;
+	    }
+
+	    auto value = val_gen();
+	    A_rows.push_back(i);
+	    A_columns.push_back(j);
+	    A_values.push_back(value);
+	}
+    }
+
+    A.resize(A_rows.size());
+
+    // fillRand(A_rows, 0UL, N);
+    // fillRand(A_columns, 0UL, N);
+    // fillRand(A_values, -10.0, 10.0);
     BCAST(A_rows, UNSIGNED_LONG);
     BCAST(A_columns, UNSIGNED_LONG);
     BCAST(A_values, DOUBLE);
@@ -53,7 +80,8 @@ void createRandomLinearSystem(std::vector<COOElement> &A, std::vector<size_t> &A
     }
     sortCOOElements(A);
 
-    fillRand(x, -10.0, 10.0);
+    std::generate(x.begin(), x.end(), val_gen);
+    // fillRand(x, -10.0, 10.0);
 
     std::fill(b.begin(), b.end(), 0.0);
     for (size_t i = 0; i < A.size(); i += 1) {
@@ -65,8 +93,8 @@ void createRandomLinearSystem(std::vector<COOElement> &A, std::vector<size_t> &A
 }
 
 
-void reset(Context *ctx) {
-    createRandomLinearSystem(ctx->A, ctx->A_rows, ctx->A_columns, ctx->A_values, ctx->b, ctx->x, ctx->N);
+void reset(Context *ctx, std::mt19937& engine) {
+    createRandomLinearSystem(ctx->A, ctx->A_rows, ctx->A_columns, ctx->A_values, ctx->b, ctx->x, ctx->N, engine);
 }
 
 Context *init() {
@@ -83,20 +111,20 @@ Context *init() {
     ctx->b.resize(ctx->N);
     ctx->x.resize(ctx->N);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    solveLinearSystem(ctx->A, ctx->b, ctx->x, ctx->N);
+    submission::solveLinearSystem(ctx->A, ctx->b, ctx->x, ctx->N);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctSolveLinearSystem(ctx->A, ctx->b, ctx->x, ctx->N);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 128;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
     const size_t nVals = TEST_SIZE * TEST_SIZE * SPARSE_LA_SPARSITY;
 
     std::vector<size_t> A_rows(nVals), A_columns(nVals);
@@ -106,6 +134,36 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    createRandomLinearSystem(A, A_rows, A_columns, A_values, b, x_correct, TEST_SIZE, engine);
+    std::fill(x_test.begin(), x_test.end(), 0.0);
+
+    // compute correct result
+    correctSolveLinearSystem(A, b, x_correct, TEST_SIZE);
+
+    // compute test result
+    submission::solveLinearSystem(A, b, x_test, TEST_SIZE);
+    SYNC();
+
+    std::vector<double> b_test(TEST_SIZE);
+    std::fill(b_test.begin(), b_test.end(), 0.0);
+    for (size_t i = 0; i < A.size(); i += 1) {
+        b_test[A[i].row] += A[i].value * x_test[A[i].column];
+    }
+
+    bool isCorrect = true;
+    // if (IS_ROOT(rank) && !fequal(x_correct, x_test, 1e-3)) {
+    if (IS_ROOT(rank) && !fequal(b_test, b, 1e-3)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -116,7 +174,7 @@ bool validate(Context *ctx) {
         correctSolveLinearSystem(A, b, x_correct, TEST_SIZE);
 
         // compute test result
-        solveLinearSystem(A, b, x_test, TEST_SIZE);
+	submission::solveLinearSystem(A, b, x_test, TEST_SIZE);
         SYNC();
         
         bool isCorrect = true;
@@ -130,6 +188,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

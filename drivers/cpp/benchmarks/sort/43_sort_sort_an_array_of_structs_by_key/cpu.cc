@@ -28,10 +28,22 @@ struct Context {
     std::vector<float> value;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->startTime, 0, 100);
-    fillRand(ctx->duration, 1, 10);
-    fillRand(ctx->value, -1.0, 1.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> start_time_dist(0, 100);
+    std::uniform_int_distribution<> duration_dist(0, 100);
+    std::uniform_real_distribution<> value_dist(-1.0, 1.0);
+
+    auto start_time_gen = [&](){ return start_time_dist(engine); };
+    auto duration_gen = [&](){ return duration_dist(engine); };
+    auto value_gen = [&](){ return value_dist(engine); };
+
+    std::generate(ctx->startTime.begin(), ctx->startTime.end(), start_time_gen);
+    std::generate(ctx->duration.begin(), ctx->duration.end(), duration_gen);
+    std::generate(ctx->value.begin(), ctx->value.end(), value_gen);
+
+    // fillRand(ctx->startTime, 0, 100);
+    // fillRand(ctx->duration, 1, 10);
+    // fillRand(ctx->value, -1.0, 1.0);
 
     BCAST(ctx->startTime, INT);
     BCAST(ctx->duration, INT);
@@ -52,20 +64,20 @@ Context *init() {
     ctx->duration.resize(DRIVER_PROBLEM_SIZE);
     ctx->value.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    sortByStartTime(ctx->results);
+    submission::sortByStartTime(ctx->results);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctSortByStartTime(ctx->results);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<Result> correct(TEST_SIZE), test(TEST_SIZE);
     std::vector<int> startTime(TEST_SIZE), duration(TEST_SIZE);
@@ -74,6 +86,62 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_int_distribution<> start_time_dist(0, 100);
+    std::uniform_int_distribution<> duration_dist(0, 100);
+    std::uniform_real_distribution<> value_dist(-1.0, 1.0);
+
+    auto start_time_gen = [&](){ return start_time_dist(engine); };
+    auto duration_gen = [&](){ return duration_dist(engine); };
+    auto value_gen = [&](){ return value_dist(engine); };
+
+    std::generate(startTime.begin(), startTime.end(), start_time_gen);
+    std::generate(duration.begin(), duration.end(), duration_gen);
+    std::generate(value.begin(), value.end(), value_gen);
+    // fillRand(startTime, 0, 100);
+    // fillRand(duration, 1, 10);
+    // fillRand(value, -1.0, 1.0);
+
+    BCAST(startTime, INT);
+    BCAST(duration, INT);
+    BCAST(value, FLOAT);
+
+    for (int i = 0; i < startTime.size(); i += 1) {
+        correct[i].startTime = startTime[i];
+        correct[i].duration = duration[i];
+        correct[i].value = value[i];
+
+        test[i].startTime = startTime[i];
+        test[i].duration = duration[i];
+        test[i].value = value[i];
+    }
+
+    // compute correct result
+    correctSortByStartTime(correct);
+
+    // compute test result
+    submission::sortByStartTime(test);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank)) {
+        for (int i = 0; i < correct.size(); i += 1) {
+            if (correct[i].startTime != test[i].startTime ||
+                correct[i].duration != test[i].duration ||
+                correct[i].value != test[i].value) {
+                isCorrect = false;
+                break;
+            }
+        }
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -99,7 +167,7 @@ bool validate(Context *ctx) {
         correctSortByStartTime(correct);
 
         // compute test result
-        sortByStartTime(test);
+	submission::sortByStartTime(test);
         SYNC();
         
         bool isCorrect = true;
@@ -120,6 +188,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

@@ -50,18 +50,18 @@ void randomConnectedUndirectedGraph(std::vector<int> &A, size_t N) {
 }
 */
 
-void randomConnectedUndirectedGraph(std::vector<int> &A, size_t N) {
+void randomConnectedUndirectedGraph(std::vector<int> &A, size_t N, std::mt19937& engine) {
+    fillRandomUndirectedGraph_(A, N, engine);
+    /*
     std::vector<int> nodes(N);
     std::iota(nodes.begin(), nodes.end(), 0);
     std::random_shuffle(nodes.begin(), nodes.end());
 
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
     for (int i = 0; i < N-1; i += 1) {
         A[nodes[i] * N + nodes[i+1]] = 1;
         A[nodes[i+1] * N + nodes[i]] = 1;
     }
 
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
     for (int i = 0; i < N; i += 1) {
         // int numEdges = rand() % (N - 1);
 	int numEdges = get_random_int_range(0, N - 2);
@@ -74,14 +74,16 @@ void randomConnectedUndirectedGraph(std::vector<int> &A, size_t N) {
             }
         }
     }
+    */
 }
 
-void reset(Context *ctx) {
-    randomConnectedUndirectedGraph(ctx->A, ctx->N);
-    ctx->source = rand() % ctx->N;
+void reset(Context *ctx, std::mt19937& engine) {
+    randomConnectedUndirectedGraph(ctx->A, ctx->N, engine);
+    std::uniform_int_distribution<> dist(0, ctx->N - 1);
+    ctx->source = dist(engine);
     
     do {
-        ctx->dest = rand() % ctx->N;
+        ctx->dest = dist(engine);
     } while (ctx->dest == ctx->source);
 
     BCAST(ctx->A, INT);
@@ -95,12 +97,12 @@ Context *init() {
     ctx->N = DRIVER_PROBLEM_SIZE;
     ctx->A.resize(ctx->N * ctx->N);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    int sp = shortestPathLength(ctx->A, ctx->N, ctx->source, ctx->dest);
+    int sp = submission::shortestPathLength(ctx->A, ctx->N, ctx->source, ctx->dest);
     (void)sp;
 }
 
@@ -109,14 +111,55 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)sp;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 512;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<int> A(TEST_SIZE * TEST_SIZE);
+
+    std::uniform_int_distribution<> dist(0, ctx->N - 1);
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    randomConnectedUndirectedGraph(A, TEST_SIZE, engine);
+    int source = dist(engine) % TEST_SIZE;
+    int dest;
+    do {
+        dest = dist(engine) % TEST_SIZE;
+    } while (dest == source);
+        
+    BCAST(A, INT);
+    BCAST_PTR(&source, 1, INT);
+    BCAST_PTR(&dest, 1, INT);
+
+    // compute correct result
+    int correct = correctShortestPathLength(A, TEST_SIZE, source, dest);
+
+    // compute test result
+    int test = submission::shortestPathLength(A, TEST_SIZE, source, dest);
+    SYNC();
+
+    // normalize "not-found" results
+    if (correct == std::numeric_limits<int>::max() || correct < 0) {
+        correct = -1;
+    }
+    if (test == std::numeric_limits<int>::max() || test < 0) {
+        test = -1;
+    }
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && correct != test) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -135,7 +178,7 @@ bool validate(Context *ctx) {
         int correct = correctShortestPathLength(A, TEST_SIZE, source, dest);
 
         // compute test result
-        int test = shortestPathLength(A, TEST_SIZE, source, dest);
+        int test = submission::shortestPathLength(A, TEST_SIZE, source, dest);
         SYNC();
 
         // normalize "not-found" results
@@ -157,6 +200,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

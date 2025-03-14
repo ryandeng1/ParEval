@@ -22,41 +22,81 @@ struct Context {
     std::vector<int> x;
 };
 
-void fillRandWithZeroes(std::vector<int> &x) {
+void fillRandWithZeroes(std::vector<int> &x, std::mt19937& engine) {
     // fill x with random values, but set some to zero
+    std::uniform_int_distribution<> dist(0, 1e8);
+
+    auto gen = [&](){
+	auto rand_val = dist(engine);
+	auto rand_val2 = dist(engine);
+	if (rand_val2 % 5 == 0) {
+	    return 0;
+	}
+
+	return rand_val;
+    };
+
+    std::generate(x.begin(), x.end(), gen);
+
+    /*
     for (int i = 0; i < x.size(); i += 1) {
         x[i] = rand();
         if (rand() % 5) {
             x[i] = 0;
         }
     }
+    */
 }
 
-void reset(Context *ctx) {
-    fillRandWithZeroes(ctx->x);
+void reset(Context *ctx, std::mt19937& engine) {
+    fillRandWithZeroes(ctx->x, engine);
     BCAST(ctx->x, INT);
 }
 
 Context *init() {
     Context *ctx = new Context();
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    sortIgnoreZero(ctx->x);
+    submission::sortIgnoreZero(ctx->x);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctSortIgnoreZero(ctx->x);
 }
 
-bool validate(Context *ctx) {
-
+bool validate(Context *ctx, std::mt19937& engine) {
     int rank;
     GET_RANK(rank);
 
+    std::vector<int> input(DRIVER_PROBLEM_SIZE);
+    fillRandWithZeroes(input, engine);
+    BCAST(input, INT);
+
+    // compute correct result
+    std::vector<int> correctResult = input;
+    correctSortIgnoreZero(correctResult);
+
+    // compute test result
+    std::vector<int> testResult = input;
+    submission::sortIgnoreZero(testResult);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !std::equal(correctResult.begin(), correctResult.end(), testResult.begin())) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         std::vector<int> input(1024);
@@ -69,7 +109,7 @@ bool validate(Context *ctx) {
 
         // compute test result
         std::vector<int> testResult = input;
-        sortIgnoreZero(testResult);
+	submission::sortIgnoreZero(testResult);
         SYNC();
         
         bool isCorrect = true;
@@ -83,6 +123,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

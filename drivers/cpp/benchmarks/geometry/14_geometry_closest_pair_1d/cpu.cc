@@ -25,8 +25,13 @@ struct Context {
     std::vector<double> x;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -1000.0, 1000.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-1000.0, 1000.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, -1000.0, 1000.0);
     BCAST(ctx->x, DOUBLE);
 }
 
@@ -35,12 +40,12 @@ Context *init() {
 
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    double distance = closestPair(ctx->x);
+    double distance = submission::closestPair(ctx->x);
     (void)distance;
 }
 
@@ -49,8 +54,8 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)distance;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> x(TEST_SIZE);
     double correct = 0.0, test = 0.0;
@@ -58,6 +63,36 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(-1000.0, 1000.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
+    // fillRand(x, -1000.0, 1000.0);
+    test = 0.0;
+    correct = 0.0;
+    BCAST(x, DOUBLE);
+
+    // compute correct result
+    correct = correctClosestPair(x);
+
+    // compute test result
+    test = submission::closestPair(x);
+    SYNC();
+
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && std::abs(correct - test) > 1e-4) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -70,7 +105,7 @@ bool validate(Context *ctx) {
         correct = correctClosestPair(x);
 
         // compute test result
-        test = closestPair(x);
+        test = submission::closestPair(x);
         SYNC();
 
         bool isCorrect = true;
@@ -84,6 +119,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

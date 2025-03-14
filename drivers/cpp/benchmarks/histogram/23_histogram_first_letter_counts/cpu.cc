@@ -25,9 +25,24 @@ struct Context {
     std::array<size_t, 26> bins;
 };
 
-void reset(Context *ctx) {
+void reset(Context *ctx, std::mt19937& engine) {
     /* for this it doesn't matter if every process has the same data */
-    fillRandString(ctx->s, 2, 10);
+    const std::string characters = "abcdefghijklmnopqrstuvwxyz";
+    std::uniform_int_distribution<> char_dist(0, 25);
+    std::uniform_int_distribution<> len_dist(2, 10);
+
+    auto gen = [&](){
+	auto len = len_dist(engine);
+	std::string randomString;
+        for (int i = 0; i < len; i++) {
+            randomString += characters[char_dist(engine)];
+        }
+	return randomString;
+    };
+
+    std::generate(ctx->s.begin(), ctx->s.end(), gen);
+
+    // fillRandString(ctx->s, 2, 10);
     ctx->bins.fill(0);
 }
 
@@ -36,20 +51,20 @@ Context *init() {
 
     ctx->s.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    firstLetterCounts(ctx->s, ctx->bins);
+    submission::firstLetterCounts(ctx->s, ctx->bins);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctFirstLetterCounts(ctx->s, ctx->bins);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<std::string> s(TEST_SIZE);
     std::array<size_t, 26> correct, test;
@@ -58,6 +73,54 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    const std::string characters = "abcdefghijklmnopqrstuvwxyz";
+    std::uniform_int_distribution<> char_dist(0, 25);
+    std::uniform_int_distribution<> len_dist(2, 10);
+
+    auto randStringGen = [&](){
+	auto len = len_dist(engine);
+	std::string randomString;
+        for (int i = 0; i < len; i++) {
+            randomString += characters[char_dist(engine)];
+        }
+	return randomString;
+    };
+
+    std::generate(s.begin(), s.end(), randStringGen);
+    // fillRandString(s, 2, 10);
+
+    // set up input
+    for (int j = 0; j < firstLetters.size(); j += 1) {
+        firstLetters[j] = rand() % 26 + 'a';
+    }
+    BCAST(firstLetters, CHAR);
+
+    for (int j = 0; j < s.size(); j += 1) {
+        s[j][0] = firstLetters[j];  // ensure every rank at least has the same first letters
+    }
+
+    correct.fill(0);
+    test.fill(0);
+
+    // compute correct result
+    correctFirstLetterCounts(s, correct);
+
+    // compute test result
+    submission::firstLetterCounts(s, test);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !std::equal(correct.begin(), correct.end(), test.begin())) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+       return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -77,7 +140,7 @@ bool validate(Context *ctx) {
         correctFirstLetterCounts(s, correct);
 
         // compute test result
-        firstLetterCounts(s, test);
+	submission::firstLetterCounts(s, test);
         SYNC();
         
         bool isCorrect = true;
@@ -91,6 +154,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

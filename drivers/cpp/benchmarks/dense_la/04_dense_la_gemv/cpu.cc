@@ -23,9 +23,16 @@ struct Context {
     size_t M, N;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->A, -10.0, 10.0);
-    fillRand(ctx->x, -10.0, 10.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-10.0, 10.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->A.begin(), ctx->A.end(), gen);
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+
+    // fillRand(ctx->A, -10.0, 10.0, engine);
+    // fillRand(ctx->x, -10.0, 10.0, engine);
 
     BCAST(ctx->A, DOUBLE);
     BCAST(ctx->x, DOUBLE);
@@ -41,20 +48,20 @@ Context *init() {
     ctx->x.resize(ctx->N);
     ctx->y.resize(ctx->M);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    gemv(ctx->A, ctx->x, ctx->y, ctx->M, ctx->N);
+    submission::gemv(ctx->A, ctx->x, ctx->y, ctx->M, ctx->N);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctGemv(ctx->A, ctx->x, ctx->y, ctx->M, ctx->N);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> A(TEST_SIZE * TEST_SIZE);
     std::vector<double> x(TEST_SIZE);
@@ -63,6 +70,38 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(-10.0, 10.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(A.begin(), A.end(), gen);
+    std::generate(x.begin(), x.end(), gen);
+
+    // fillRand(A, -10.0, 10.0, engine);
+    // fillRand(x, -10.0, 10.0, engine);
+    BCAST(A, DOUBLE);
+    BCAST(x, DOUBLE);
+
+    // compute correct result
+    correctGemv(A, x, correct, TEST_SIZE, TEST_SIZE);
+
+    // compute test result
+    submission::gemv(A, x, test, TEST_SIZE, TEST_SIZE);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !fequal(correct, test, 1e-4)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -75,7 +114,7 @@ bool validate(Context *ctx) {
         correctGemv(A, x, correct, TEST_SIZE, TEST_SIZE);
 
         // compute test result
-        gemv(A, x, test, TEST_SIZE, TEST_SIZE);
+	submission::gemv(A, x, test, TEST_SIZE, TEST_SIZE);
         SYNC();
         
         bool isCorrect = true;
@@ -89,6 +128,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

@@ -27,25 +27,12 @@ struct Context {
     size_t N;
 };
 
-/*
-void fillRandDirectedGraph(std::vector<int> &A, size_t N) {
-    std::fill(A.begin(), A.end(), 0);
-    for (int i = 0; i < N; i += 1) {
-        for (int j = 0; j < N; j += 1) {
-            if (rand() % 2 == 0) {
-                A[i * N + j] = 1;
-            }
-        }
-    }
-}
-*/
-
-void fillRandDirectedGraph(std::vector<int> &A, size_t N) {
-    fillRandDirectedGraph_(A, N);
+void fillRandDirectedGraph(std::vector<int> &A, size_t N, std::mt19937& engine) {
+    fillRandDirectedGraph_(A, N, engine);
 }
 
-void reset(Context *ctx) {
-    fillRandDirectedGraph(ctx->A, ctx->N);
+void reset(Context *ctx, std::mt19937& engine) {
+    fillRandDirectedGraph(ctx->A, ctx->N, engine);
     BCAST(ctx->A, INT);
 }
 
@@ -55,12 +42,12 @@ Context *init() {
     ctx->N = DRIVER_PROBLEM_SIZE;
     ctx->A.resize(ctx->N * ctx->N);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    int ec = edgeCount(ctx->A, ctx->N);
+    int ec = submission::edgeCount(ctx->A, ctx->N);
     (void)ec;
 }
 
@@ -69,14 +56,37 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)ec;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 128;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<int> A(TEST_SIZE * TEST_SIZE);
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    fillRandDirectedGraph(A, TEST_SIZE, engine);
+    BCAST(A, INT);
+
+    // compute correct result
+    int correct = correctEdgeCount(A, TEST_SIZE);
+
+    // compute test result
+    int test = submission::edgeCount(A, TEST_SIZE);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && correct != test) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -87,7 +97,7 @@ bool validate(Context *ctx) {
         int correct = correctEdgeCount(A, TEST_SIZE);
 
         // compute test result
-        int test = edgeCount(A, TEST_SIZE);
+        int test = submission::edgeCount(A, TEST_SIZE);
         SYNC();
         
         bool isCorrect = true;
@@ -101,6 +111,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

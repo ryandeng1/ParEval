@@ -22,9 +22,16 @@ struct Context {
     std::vector<double> x, y, z;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -1.0, 1.0);
-    fillRand(ctx->y, -1.0, 1.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-1.0, 1.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    std::generate(ctx->y.begin(), ctx->y.end(), gen);
+
+    // fillRand(ctx->x, -1.0, 1.0, engine);
+    // fillRand(ctx->y, -1.0, 1.0, engine);
 
     BCAST(ctx->x, DOUBLE);
     BCAST(ctx->y, DOUBLE);
@@ -38,20 +45,20 @@ Context *init() {
     ctx->y.resize(DRIVER_PROBLEM_SIZE);
     ctx->z.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    axpy(ctx->alpha, ctx->x, ctx->y, ctx->z);
+    submission::axpy(ctx->alpha, ctx->x, ctx->y, ctx->z);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctAxpy(ctx->alpha, ctx->x, ctx->y, ctx->z);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> x(TEST_SIZE), y(TEST_SIZE), correct(TEST_SIZE), test(TEST_SIZE);
     double alpha = 2.0;
@@ -59,6 +66,37 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(-1.0, 1.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
+    std::generate(y.begin(), y.end(), gen);
+    // fillRand(x, -1.0, 1.0, engine);
+    // fillRand(y, -1.0, 1.0, engine);
+    BCAST(x, DOUBLE);
+    BCAST(y, DOUBLE);
+
+    // compute correct result
+    correctAxpy(alpha, x, y, correct);
+
+    // compute test result
+    submission::axpy(alpha, x, y, test);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !fequal(correct, test, 1e-6)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -71,7 +109,7 @@ bool validate(Context *ctx) {
         correctAxpy(alpha, x, y, correct);
 
         // compute test result
-        axpy(alpha, x, y, test);
+	submission::axpy(alpha, x, y, test);
         SYNC();
         
         bool isCorrect = true;
@@ -85,6 +123,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

@@ -7,36 +7,21 @@
 #include <complex>
 #include <queue>
 #include <type_traits>
+#include <set>
+#include <utility>
 
-#include <xoshiro.h>
 #include <omp.h>
 #include <iostream>
 
-constexpr int NUM_THREADS_SETUP = 32;
-
-int get_random_bit() {
-    // thread-local since rng is not thread-safe and may potentially use many threads to create random numbers in parallel
-    static thread_local xso::rng gen;
-    return gen.sample(0, 1);
-}
-
-int get_random_int_range(int start, int end) {
-    static thread_local xso::rng gen;
-    // return gen[omp_get_thread_num()].sample(start, end);
-    return gen.sample(start, end);
-}
-
 template <typename DType>
-DType get_random_val_range(DType min, DType max) {
-    // auto& g = gen[omp_get_thread_num()];
-    static thread_local xso::rng gen;
+DType get_random_val_range(DType min, DType max, std::mt19937& engine) {
     DType val;
     if constexpr (std::is_floating_point_v<DType>) {
-        val = gen.sample(min, max);
-        // val = g.sample(min, max);
+	std::uniform_real_distribution distrib(min, max);
+	val = distrib(engine);
     } else if constexpr (std::is_integral_v<DType>) {
-        // val = g.sample(min, max - 1);
-        val = gen.sample(min, max - 1);
+	std::uniform_int_distribution distrib(min, max - 1);
+	val = distrib(engine);
     }
     return val;
 }
@@ -54,7 +39,7 @@ DType get_random_val_range(DType min, DType max) {
 #endif
 
 #if !defined(MAX_VALIDATION_ATTEMPTS)
-#define MAX_VALIDATION_ATTEMPTS 3
+#define MAX_VALIDATION_ATTEMPTS 1
 #endif
 
 #if !defined(SPARSE_LA_SPARSITY)
@@ -172,9 +157,9 @@ void fillRandString(T &x, size_t minLen, size_t maxLen) {
 }
 */
 
+/*
 template <typename T>
-void fillRandString(T &x, size_t minLen, size_t maxLen) {
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
+void fillRandString(T &x, size_t minLen, size_t maxLen, std::mt19937& engine) {
     for (int i = 0; i < x.size(); i += 1) {
         // size_t len = rand() % (maxLen - minLen) + minLen;
         size_t len = get_random_val_range(minLen, maxLen);
@@ -186,6 +171,7 @@ void fillRandString(T &x, size_t minLen, size_t maxLen) {
         x[i] = str;
     }
 }
+*/
 
 // utility functions
 /*
@@ -208,20 +194,20 @@ void fillRand(T &x, DType min, DType max) {
 }
 */
 
+/*
 template <typename T, typename DType>
-void fillRand(T &x, DType min, DType max) {
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
+void fillRand(T &x, DType min, DType max, std::mt19937& engine) {
     for (int i = 0; i < x.size(); i += 1) {
         DType val;
         if constexpr (std::is_floating_point_v<DType>) {
             // val = (rand() / (double) RAND_MAX) * (max - min) + min;
-            val = get_random_val_range(min, max);
+            val = get_random_val_range(min, max, engine);
         } else if constexpr (std::is_integral_v<DType>) {
             // val = rand() % (max - min) + min;
-            val = get_random_val_range(min, max);
+            val = get_random_val_range(min, max, engine);
         } else if constexpr (std::is_same_v<DType, std::complex<double>>) {
-            const double real = get_random_val_range(min, max);
-            const double imag = get_random_val_range(min, max);
+            const double real = get_random_val_range(min, max, engine);
+            const double imag = get_random_val_range(min, max, engine);
             // const double real = (rand() / (double) RAND_MAX) * (max - min) + min;
             // const double imag = (rand() / (double) RAND_MAX) * (max - min) + min;
             val = std::complex<double>(real, imag);
@@ -229,38 +215,90 @@ void fillRand(T &x, DType min, DType max) {
         x[i] = val;
     }
 }
+*/
 
 // compare two vectors of floating point numbers
 template <typename Vec, typename FType>
 bool fequal(Vec const& a, Vec const& b, FType epsilon = 1e-6) {
     assert(a.size() == b.size());
     for (int i = 0; i < a.size(); i += 1) {
-        if (std::abs(a[i] - b[i]) > epsilon) {
+        if (std::abs(a[i] - b[i]) > epsilon || std::isnan(a[i]) || std::isnan(b[i])) {
             return false;
         }
     }
     return true;
 }
 
-void fillRandomUndirectedGraph_(std::vector<int> &A, size_t N) {
+// Function to generate an R-MAT graph with any number of nodes
+void generateRMATGraph(std::vector<int>& A, int N, int numEdges, double a, double b, double c, double d, bool is_directed, std::mt19937& engine) {
     std::fill(A.begin(), A.end(), 0);
 
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
-    for (int i = 0; i < N; i += 1) {
-        A[i * N + i] = 0;
-        for (int j = i + 1; j < N; j += 1) {
-            // A[i * N + j] = rand() % 2;
-            A[i * N + j] = get_random_bit();
-            A[j * N + i] = A[i * N + j];
+    std::vector<std::pair<int, int>> edges;
+    std::set<std::pair<int, int>> edgeSet;
+
+    std::uniform_real_distribution<> dist(0, 1);
+    std::uniform_int_distribution<> v_dist(0, N - 1);
+
+    for (int i = 0; i < numEdges; ++i) {
+        int u = v_dist(engine);
+        int v = v_dist(engine);  // Start at a random node
+
+        int step = N / 2;  // Start with the largest division step
+        while (step > 0) {
+            double r = dist(engine);
+
+            if (r < a) {
+                // Top-left quadrant
+            } else if (r < a + b) {
+                v += step;
+            } else if (r < a + b + c) {
+                u += step;
+            } else {
+                u += step;
+                v += step;
+            }
+
+            step /= 2;
+        }
+
+        if (u >= N) u = v_dist(engine);  // Ensure u is within bounds
+        if (v >= N) v = v_dist(engine);  // Ensure v is within bounds
+
+        if (u != v && edgeSet.find({u, v}) == edgeSet.end()) {
+            edges.emplace_back(u, v);
+            edgeSet.insert({u, v});
+        }
+    }
+
+    for (auto& [u, v] : edges) {
+        A[u * N + v] = 1;
+        if (!is_directed) {
+            A[v * N + u] = 1;
         }
     }
 }
 
-void fillRandDirectedGraph_(std::vector<int> &A, size_t N) {
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
-    for (int i = 0; i < N; i += 1) {
-        for (int j = 0; j < N; j += 1) {
-            A[i * N + j] = get_random_bit();
-        }
-    }
+void fillRandomUndirectedGraph_(std::vector<int> &A, size_t N, std::mt19937& engine) {
+    std::uniform_int_distribution<> e_dist(0, N * (N - 1) / 2);
+    int num_edges = e_dist(engine);
+
+    double a = 0.45;
+    double b = 0.15;
+    double c = 0.15;
+    double d = 0.25;
+    
+    generateRMATGraph(A, N, num_edges, a, b, c, d, false, engine);
 }
+
+void fillRandDirectedGraph_(std::vector<int> &A, size_t N, std::mt19937& engine) {
+    std::uniform_int_distribution<> e_dist(0, N * (N - 1));
+    int num_edges = e_dist(engine);
+
+    double a = 0.45;
+    double b = 0.15;
+    double c = 0.15;
+    double d = 0.25;
+    
+    generateRMATGraph(A, N, num_edges, a, b, c, d, true, engine);
+}
+

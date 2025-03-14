@@ -24,8 +24,13 @@ struct Context {
     std::vector<int> x;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, 0.0, 100.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(0, 1e6);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, 0.0, 100.0);
     BCAST(ctx->x, INT);
 }
 
@@ -34,12 +39,12 @@ Context *init() {
 
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    int val = smallestOdd(ctx->x);
+    int val = submission::smallestOdd(ctx->x);
     (void)val;
 }
 
@@ -48,15 +53,44 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)val;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<int> x(TEST_SIZE);
     int test, correct;
 
     int rank;
+
+    std::uniform_int_distribution<> dist(0, 1e6);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
     GET_RANK(rank);
 
+    // set up input
+    // fillRand(x, 0.0, 100.0);
+    BCAST(x, INT);
+
+    // compute correct result
+    correct = correctSmallestOdd(x);
+
+    // compute test result
+    test = submission::smallestOdd(x);
+    SYNC();
+
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && correct != test) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -67,7 +101,7 @@ bool validate(Context *ctx) {
         correct = correctSmallestOdd(x);
 
         // compute test result
-        test = smallestOdd(x);
+        test = submission::smallestOdd(x);
         SYNC();
 
         bool isCorrect = true;
@@ -81,6 +115,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

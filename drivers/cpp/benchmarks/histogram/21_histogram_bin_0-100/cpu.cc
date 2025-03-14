@@ -24,8 +24,13 @@ struct Context {
     std::array<size_t, 10> bins;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, 0.0, 100.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(0.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, 0.0, 100.0);
     BCAST(ctx->x, DOUBLE);
     ctx->bins.fill(0);
 }
@@ -35,20 +40,20 @@ Context *init() {
 
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    binsBy10Count(ctx->x, ctx->bins);
+    submission::binsBy10Count(ctx->x, ctx->bins);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctBinsBy10Count(ctx->x, ctx->bins);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> x(TEST_SIZE);
     std::array<size_t, 10> correct, test;
@@ -56,6 +61,36 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(0.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
+    // fillRand(x, 0.0, 100.0);
+    BCAST(x, DOUBLE);
+    correct.fill(0);
+    test.fill(0);
+
+    // compute correct result
+    correctBinsBy10Count(x, correct);
+
+    // compute test result
+    submission::binsBy10Count(x, test);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !std::equal(correct.begin(), correct.end(), test.begin())) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -68,7 +103,7 @@ bool validate(Context *ctx) {
         correctBinsBy10Count(x, correct);
 
         // compute test result
-        binsBy10Count(x, test);
+	submission::binsBy10Count(x, test);
         SYNC();
         
         bool isCorrect = true;
@@ -82,6 +117,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

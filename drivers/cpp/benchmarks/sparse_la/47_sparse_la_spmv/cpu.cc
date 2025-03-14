@@ -32,15 +32,43 @@ struct Context {
     size_t M, N;
 };
 
-void reset(Context *ctx) {
-    ctx->alpha = (rand() / (double) RAND_MAX) * 2.0 - 1.0;
-    ctx->beta = (rand() / (double) RAND_MAX) * 2.0 - 1.0;
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> prob_dist(0.0, 1.0);
+    std::uniform_real_distribution<> val_dist(-1.0, 1.0);
 
-    fillRand(ctx->rows, 0UL, ctx->M);
-    fillRand(ctx->columns, 0UL, ctx->N);
-    fillRand(ctx->values, -1.0, 1.0);
-    fillRand(ctx->x, -1.0, 1.0);
-    fillRand(ctx->y, -1.0, 1.0);
+    auto prob_gen = [&](){ return prob_dist(engine); };
+    auto val_gen = [&](){ return val_dist(engine); };
+
+    ctx->rows.clear();
+    ctx->columns.clear();
+    ctx->values.clear();
+    for (size_t i = 0; i < ctx->M; i++) {
+	for (size_t j = 0; j < ctx->N; j++) {
+	    auto prob = prob_gen();
+	    if (prob > SPARSE_LA_SPARSITY) {
+	        continue;
+	    }
+
+	    auto value = val_gen();
+	    ctx->rows.push_back(i);
+	    ctx->columns.push_back(j);
+	    ctx->values.push_back(value);
+	}
+    }
+
+    ctx->A.resize(ctx->rows.size());
+
+    std::generate(ctx->x.begin(), ctx->x.end(), val_gen);
+    std::generate(ctx->y.begin(), ctx->y.end(), val_gen);
+
+    ctx->alpha = val_gen();
+    ctx->beta = val_gen();
+
+    // fillRand(ctx->rows, 0UL, ctx->M);
+    // fillRand(ctx->columns, 0UL, ctx->N);
+    // fillRand(ctx->values, -1.0, 1.0);
+    // fillRand(ctx->x, -1.0, 1.0);
+    // fillRand(ctx->y, -1.0, 1.0);
 
     BCAST_PTR(&ctx->alpha, 1, DOUBLE);
     BCAST_PTR(&ctx->beta, 1, DOUBLE);
@@ -72,20 +100,20 @@ Context *init() {
     ctx->x.resize(ctx->N);
     ctx->y.resize(ctx->M);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    spmv(ctx->alpha, ctx->A, ctx->x, ctx->beta, ctx->y, ctx->M, ctx->N);
+    submission::spmv(ctx->alpha, ctx->A, ctx->x, ctx->beta, ctx->y, ctx->M, ctx->N);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctSpmv(ctx->alpha, ctx->A, ctx->x, ctx->beta, ctx->y, ctx->M, ctx->N);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 128;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
     const size_t nVals = TEST_SIZE * TEST_SIZE * SPARSE_LA_SPARSITY;
 
     std::vector<COOElement> A(nVals);
@@ -95,6 +123,76 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    // double alpha = (rand() / (double) RAND_MAX) * 2.0 - 1.0;
+    // double beta = (rand() / (double) RAND_MAX) * 2.0 - 1.0;
+
+    std::uniform_real_distribution<> prob_dist(0.0, 1.0);
+    std::uniform_real_distribution<> val_dist(-1.0, 1.0);
+
+    auto prob_gen = [&](){ return prob_dist(engine); };
+    auto val_gen = [&](){ return val_dist(engine); };
+
+    rows.clear();
+    columns.clear();
+    values.clear();
+    for (size_t i = 0; i < ctx->M; i++) {
+	for (size_t j = 0; j < ctx->N; j++) {
+	    auto prob = prob_gen();
+	    if (prob > SPARSE_LA_SPARSITY) {
+	        continue;
+	    }
+
+	    auto value = val_gen();
+	    rows.push_back(i);
+	    columns.push_back(j);
+	    values.push_back(value);
+	}
+    }
+
+    A.resize(rows.size());
+
+    std::generate(x.begin(), x.end(), val_gen);
+    std::generate(correct.begin(), correct.end(), val_gen);
+
+    double alpha = val_gen();
+    double beta = val_gen();
+
+    BCAST_PTR(&alpha, 1, DOUBLE);
+    BCAST_PTR(&beta, 1, DOUBLE);
+    BCAST(rows, UNSIGNED_LONG);
+    BCAST(columns, UNSIGNED_LONG);
+    BCAST(values, DOUBLE);
+    BCAST(x, DOUBLE);
+    BCAST(correct, DOUBLE);
+    test = correct;
+
+    for (size_t i = 0; i < A.size(); i += 1) {
+        A[i] = {rows[i], columns[i], values[i]};
+    }
+    std::sort(A.begin(), A.end(), [](COOElement const& a, COOElement const& b) {
+        return (a.row == b.row) ? (a.column < b.column) : (a.row < b.row);
+    });
+
+    // compute correct result
+    correctSpmv(alpha, A, x, beta, correct, TEST_SIZE, TEST_SIZE);
+
+    // compute test result
+    submission::spmv(alpha, A, x, beta, test, TEST_SIZE, TEST_SIZE);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !fequal(correct, test, 1e-4)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -126,7 +224,7 @@ bool validate(Context *ctx) {
         correctSpmv(alpha, A, x, beta, correct, TEST_SIZE, TEST_SIZE);
 
         // compute test result
-        spmv(alpha, A, x, beta, test, TEST_SIZE, TEST_SIZE);
+	submission::spmv(alpha, A, x, beta, test, TEST_SIZE, TEST_SIZE);
         SYNC();
         
         bool isCorrect = true;
@@ -140,6 +238,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

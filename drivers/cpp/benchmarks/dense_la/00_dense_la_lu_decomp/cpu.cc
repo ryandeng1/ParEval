@@ -24,8 +24,47 @@ struct Context {
     size_t N;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->A, -10.0, 10.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    const int N = ctx->N;
+    std::vector<double> L(N * N);
+    std::vector<double> U(N * N);
+
+    std::uniform_real_distribution dist(-10.0, 10.0);
+
+    auto gen = [&]() { return dist(engine); };
+
+    std::generate(L.begin(), L.end(), gen);
+    std::generate(U.begin(), U.end(), gen);
+
+    for (int i = 0; i < N; i++) {
+	for (int j = 0; j < N; j++) {
+	    if (i < j) {
+		L[i * N + j] = 0.0;
+	    }
+
+	    if (i > j) {
+		U[i * N + j] = 0.0;
+	    }
+
+	    if (i == j) {
+		L[i * N + j] = 1.0;
+		U[i * N + j] = 1.0;
+	    }
+	}
+    }
+
+    std::fill(ctx->A.begin(), ctx->A.end(), 0.0);
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            double sum = 0.0;
+            for (size_t k = 0; k < N; k++) {
+                sum += L[i * N + k] * U[k * N + j];  // Row-major access
+            }
+            ctx->A[i * N + j] = sum;
+        }
+    }
+
+    // fillRand(ctx->A, -10.0, 10.0, engine);
     BCAST(ctx->A, DOUBLE);
 }
 
@@ -35,28 +74,90 @@ Context *init() {
     ctx->N = DRIVER_PROBLEM_SIZE;
     ctx->A.resize(ctx->N * ctx->N);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    luFactorize(ctx->A, ctx->N);
+    submission::luFactorize(ctx->A, ctx->N);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctLuFactorize(ctx->A, ctx->N);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 512;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> A(TEST_SIZE * TEST_SIZE);
     std::vector<double> A_correct(TEST_SIZE * TEST_SIZE);
     std::vector<double> A_test(TEST_SIZE * TEST_SIZE);
 
+    std::vector<double> L(TEST_SIZE * TEST_SIZE);
+    std::vector<double> U(TEST_SIZE * TEST_SIZE);
+
+    std::uniform_real_distribution dist(-10.0, 10.0);
+
+    auto gen = [&]() { return dist(engine); };
+
+    std::generate(L.begin(), L.end(), gen);
+    std::generate(U.begin(), U.end(), gen);
+
+    for (int i = 0; i < TEST_SIZE; i++) {
+	for (int j = 0; j < TEST_SIZE; j++) {
+	    if (i < j) {
+		L[i * TEST_SIZE + j] = 0.0;
+	    }
+
+	    if (i > j) {
+		U[i * TEST_SIZE + j] = 0.0;
+	    }
+
+	    if (i == j) {
+		L[i * TEST_SIZE + j] = 1.0;
+		U[i * TEST_SIZE + j] = 1.0;
+	    }
+	}
+    }
+
+    std::fill(A.begin(), A.end(), 0.0);
+    for (int i = 0; i < TEST_SIZE; i++) {
+        for (int j = 0; j < TEST_SIZE; j++) {
+            double sum = 0.0;
+            for (size_t k = 0; k < TEST_SIZE; k++) {
+                sum += L[i * TEST_SIZE + k] * U[k * TEST_SIZE + j];  // Row-major access
+            }
+            A[i * TEST_SIZE + j] = sum;
+        }
+    }
+
     int rank;
     GET_RANK(rank);
 
+    // fillRand(A, -10.0, 10.0);
+    BCAST(A, DOUBLE);
+
+    // compute correct result
+    A_correct = A;
+    correctLuFactorize(A_correct, TEST_SIZE);
+
+    // compute test result
+    A_test = A;
+    submission::luFactorize(A_test, TEST_SIZE);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !fequal(A_correct, A_test, 1e-3)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -69,7 +170,7 @@ bool validate(Context *ctx) {
 
         // compute test result
         A_test = A;
-        luFactorize(A_test, TEST_SIZE);
+	submission::luFactorize(A_test, TEST_SIZE);
         SYNC();
         
         bool isCorrect = true;
@@ -83,6 +184,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

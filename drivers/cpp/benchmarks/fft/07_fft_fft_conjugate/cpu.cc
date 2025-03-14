@@ -22,14 +22,19 @@ struct Context {
     std::vector<double> real, imag;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->real, -1.0, 1.0);
-    fillRand(ctx->imag, -1.0, 1.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    // fillRand(ctx->real, -1.0, 1.0);
+    // fillRand(ctx->imag, -1.0, 1.0);
+    std::uniform_real_distribution<> dist(-1.0, 1.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->real.begin(), ctx->real.end(), gen);
+    std::generate(ctx->imag.begin(), ctx->imag.end(), gen);
     BCAST(ctx->real, DOUBLE);
     BCAST(ctx->imag, DOUBLE);
 
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
-    for (size_t i = 0; i < ctx->x.size(); i += 1) {
+    for (size_t i = 0; i < ctx->x.size(); i++) {
         ctx->x[i] = std::complex<double>(ctx->real[i], ctx->imag[i]);
     }
 }
@@ -41,19 +46,19 @@ Context *init() {
     ctx->real.resize(DRIVER_PROBLEM_SIZE);
     ctx->imag.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    fftConjugate(ctx->x);
+    submission::fftConjugate(ctx->x);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctFft(ctx->x);
 }
 
-bool validate(Context *ctx) {
+bool validate(Context *ctx, std::mt19937& engine) {
     const size_t TEST_SIZE = 1024;
 
     std::vector<double> real(TEST_SIZE), imag(TEST_SIZE);
@@ -62,6 +67,53 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(-1.0, 1.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(real.begin(), real.end(), gen);
+    std::generate(imag.begin(), imag.end(), gen);
+    // fillRand(real, -1.0, 1.0);
+    // fillRand(imag, -1.0, 1.0);
+    BCAST(real, DOUBLE);
+    BCAST(imag, DOUBLE);
+
+    for (size_t j = 0; j < x.size(); j += 1) {
+        x[j] = std::complex<double>(real[j], imag[j]);
+    }
+
+    // compute correct result
+    std::vector<std::complex<double>> correct = x;
+    fftCooleyTookey(correct);
+
+    // compute test result
+    std::vector<std::complex<double>> test = x;
+    submission::fftConjugate(test);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank)) {
+        for (int k = 0; k < TEST_SIZE; k += 1) {
+            if (std::abs(correct[k].real() - test[k].real()) > 1e-3 || std::abs(correct[k].imag() - test[k].imag()) > 1e-3) {
+                isCorrect = false;
+                break;
+            }
+            if (std::isnan(correct[k].real()) || std::isnan(correct[k].imag()) || std::isnan(test[k].real()) || std::isnan(test[k].imag())) {
+                isCorrect = false;
+                break;
+            }
+        }
+    }
+
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -80,7 +132,7 @@ bool validate(Context *ctx) {
 
         // compute test result
         std::vector<std::complex<double>> test = x;
-        fftConjugate(test);
+	submission::fftConjugate(test);
         SYNC();
         
         bool isCorrect = true;
@@ -99,6 +151,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

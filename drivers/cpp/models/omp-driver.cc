@@ -17,6 +17,7 @@
 
 #include <omp.h>
 #include <chrono>
+#include <random>
 
 class Context;
 extern "C++" {
@@ -25,8 +26,8 @@ extern "C++" {
     Context *init();
     void compute(Context *ctx);
     void best(Context *ctx);
-    bool validate(Context *ctx);
-    void reset(Context *ctx);
+    bool validate(Context *ctx, std::mt19937& engine);
+    void reset(Context *ctx, std::mt19937& engine);
     void destroy(Context *ctx);
 }
 
@@ -45,37 +46,71 @@ int main(int argc, char **argv) {
     }
     omp_set_num_threads(num_threads);
 
+    std::mt19937 engine;
+
     /* initialize */
     Context *ctx = init();
 
+    for (int i = 0; i < NITER; i += 1) {
+	engine.seed(i);
+
+        const bool isValid = validate(ctx, engine);
+        if (!isValid) {
+            printf("Validation: FAIL\n");
+            destroy(ctx);
+            return 0;
+        }
+    }
+
+    printf("Validation: PASS\n");
+
     /* validate */
+    /*
     const bool isValid = validate(ctx);
     printf("Validation: %s\n", isValid ? "PASS" : "FAIL");
     if (!isValid) {
         destroy(ctx);
         return 0;
     }
+    */
+
+    const int NUM_WARMUP_ITER = 3;
+
+    for (int i = 0; i < NUM_WARMUP_ITER; i++) {
+	engine.seed(i);
+        reset(ctx, engine);
+        compute(ctx);
+    }
 
     /* benchmark */
     double totalTime = 0.0;
     for (int i = 0; i < NITER; i += 1) {
+	engine.seed(i);
+        reset(ctx, engine);
+
         double start = omp_get_wtime();
         compute(ctx);
         totalTime += omp_get_wtime() - start;
-    
-        reset(ctx);
     }
+
     // printf("Time: %.*f\n", DBL_DIG-1, totalTime / NITER);
     printf("Time: %.17g\n", totalTime / NITER);
+
+    for (int i = 0; i < NUM_WARMUP_ITER; i++) {
+	engine.seed(i);
+        reset(ctx, engine);
+        best(ctx);
+    }
 
     /* benchmark best */
     totalTime = 0.0;
     for (int i = 0; i < NITER; i += 1) {
+	engine.seed(i);
+        reset(ctx, engine);
+
         double start = omp_get_wtime();
         best(ctx);
         totalTime += omp_get_wtime() - start;
-
-        reset(ctx);
     }
     printf("BestSequential: %.*f\n", DBL_DIG-1, totalTime / NITER);
 

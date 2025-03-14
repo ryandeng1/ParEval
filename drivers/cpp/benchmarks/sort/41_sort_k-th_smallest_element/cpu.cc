@@ -22,11 +22,16 @@ struct Context {
     int k;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, 0, 10000);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(0, 10000);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, 0, 10000);
     BCAST(ctx->x, INT);
 
-    ctx->k = rand() % ctx->x.size();
+    ctx->k = dist(engine) % ctx->x.size();
+    // ctx->k = rand() % ctx->x.size();
     BCAST_PTR(&ctx->k, 1, INT);
 }
 
@@ -35,12 +40,12 @@ Context *init() {
 
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    int sm = findKthSmallest(ctx->x, ctx->k);
+    int sm = submission::findKthSmallest(ctx->x, ctx->k);
     (void)sm;
 }
 
@@ -49,8 +54,8 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void)sm;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<int> x(TEST_SIZE);
     int k;
@@ -58,6 +63,39 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    std::uniform_int_distribution<> dist(0, 10000);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(x.begin(), x.end(), gen);
+
+    k = dist(engine) % x.size();
+
+    // set up input
+    // fillRand(x, 0, 10000);
+    // BCAST(x, INT);
+
+    // k = rand() % x.size();
+    // BCAST_PTR(&k, 1, INT);
+
+    // compute correct result
+    int correct = correctFindKthSmallest(x, k);
+
+    // compute test result
+    int test = submission::findKthSmallest(x, k);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && correct != test) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -71,7 +109,7 @@ bool validate(Context *ctx) {
         int correct = correctFindKthSmallest(x, k);
 
         // compute test result
-        int test = findKthSmallest(x, k);
+        int test = submission::findKthSmallest(x, k);
         SYNC();
         
         bool isCorrect = true;
@@ -85,6 +123,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

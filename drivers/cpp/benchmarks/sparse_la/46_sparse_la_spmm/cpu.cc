@@ -39,14 +39,54 @@ void sortCOOElements(std::vector<COOElement> &vec) {
     });
 }
 
-void reset(Context *ctx) {
-    fillRand(ctx->X_rows, 0UL, ctx->K);
-    fillRand(ctx->X_columns, 0UL, ctx->N);
-    fillRand(ctx->X_values, -1.0, 1.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    // fillRand(ctx->X_rows, 0UL, ctx->K);
+    // fillRand(ctx->X_columns, 0UL, ctx->N);
+    // fillRand(ctx->X_values, -1.0, 1.0);
 
-    fillRand(ctx->A_rows, 0UL, ctx->M);
-    fillRand(ctx->A_columns, 0UL, ctx->K);
-    fillRand(ctx->A_values, -1.0, 1.0);
+    // fillRand(ctx->A_rows, 0UL, ctx->M);
+    // fillRand(ctx->A_columns, 0UL, ctx->K);
+    // fillRand(ctx->A_values, -1.0, 1.0);
+
+    std::uniform_real_distribution<> prob_dist(0.0, 1.0);
+    std::uniform_real_distribution<> val_dist(-1.0, 1.0);
+
+    auto prob_gen = [&](){ return prob_dist(engine); };
+    auto val_gen = [&](){ return val_dist(engine); };
+
+    ctx->X_rows.clear();
+    ctx->X_columns.clear();
+    ctx->X_values.clear();
+    for (size_t i = 0; i < ctx->K; i++) {
+	for (size_t j = 0; j < ctx->N; j++) {
+	    auto prob = prob_gen();
+	    if (prob > SPARSE_LA_SPARSITY) {
+	        continue;
+	    }
+
+	    auto value = val_gen();
+	    ctx->X_rows.push_back(i);
+	    ctx->X_columns.push_back(j);
+	    ctx->X_values.push_back(value);
+	}
+    }
+
+    ctx->A_rows.clear();
+    ctx->A_columns.clear();
+    ctx->A_values.clear();
+    for (size_t i = 0; i < ctx->M; i++) {
+	for (size_t j = 0; j < ctx->K; j++) {
+	    auto prob = prob_gen();
+	    if (prob > SPARSE_LA_SPARSITY) {
+	        continue;
+	    }
+
+	    auto value = val_gen();
+	    ctx->A_rows.push_back(i);
+	    ctx->A_columns.push_back(j);
+	    ctx->A_values.push_back(value);
+	}
+    }
 
     BCAST(ctx->X_rows, UNSIGNED_LONG);
     BCAST(ctx->X_columns, UNSIGNED_LONG);
@@ -89,32 +129,120 @@ Context *init() {
 
     ctx->Y.resize(ctx->M * ctx->N);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    spmm(ctx->A, ctx->X, ctx->Y, ctx->M, ctx->K, ctx->N);
+    submission::spmm(ctx->A, ctx->X, ctx->Y, ctx->M, ctx->K, ctx->N);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctSpmm(ctx->A, ctx->X, ctx->Y, ctx->M, ctx->K, ctx->N);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 128;
-    const size_t nVals_A = TEST_SIZE * TEST_SIZE * SPARSE_LA_SPARSITY;
-    const size_t nVals_X = TEST_SIZE * TEST_SIZE * SPARSE_LA_SPARSITY;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
+
+    int M = DRIVER_PROBLEM_SIZE;
+    int K = DRIVER_PROBLEM_SIZE / 4;
+    int N = DRIVER_PROBLEM_SIZE / 2;
+
+    const size_t nVals_A = M * K * SPARSE_LA_SPARSITY;
+    const size_t nVals_X = K * N * SPARSE_LA_SPARSITY;
 
     std::vector<size_t> X_rows(nVals_X), X_columns(nVals_X), A_rows(nVals_A), A_columns(nVals_A);
     std::vector<double> X_values(nVals_X), A_values(nVals_A);
 
     std::vector<COOElement> X(nVals_X), A(nVals_A);
-    std::vector<double> correctY(TEST_SIZE * TEST_SIZE), testY(TEST_SIZE * TEST_SIZE);
+    std::vector<double> correctY(M * N), testY(M * N);
 
     int rank;
     GET_RANK(rank);
 
+    std::uniform_real_distribution<> prob_dist(0.0, 1.0);
+    std::uniform_real_distribution<> val_dist(-1.0, 1.0);
+
+    auto prob_gen = [&](){ return prob_dist(engine); };
+    auto val_gen = [&](){ return val_dist(engine); };
+
+    X_rows.clear();
+    X_columns.clear();
+    X_values.clear();
+    for (size_t i = 0; i < K; i++) {
+	for (size_t j = 0; j < N; j++) {
+	    auto prob = prob_gen();
+	    if (prob > SPARSE_LA_SPARSITY) {
+	        continue;
+	    }
+
+	    auto value = val_gen();
+	    X_rows.push_back(i);
+	    X_columns.push_back(j);
+	    X_values.push_back(value);
+	}
+    }
+
+    X.resize(X_rows.size());
+
+    A_rows.clear();
+    A_columns.clear();
+    A_values.clear();
+    for (size_t i = 0; i < M; i++) {
+	for (size_t j = 0; j < K; j++) {
+	    auto prob = prob_gen();
+	    if (prob > SPARSE_LA_SPARSITY) {
+	        continue;
+	    }
+
+	    auto value = val_gen();
+	    A_rows.push_back(i);
+	    A_columns.push_back(j);
+	    A_values.push_back(value);
+	}
+    }
+
+    A.resize(A_rows.size());
+
+    BCAST(X_rows, UNSIGNED_LONG);
+    BCAST(X_columns, UNSIGNED_LONG);
+    BCAST(X_values, DOUBLE);
+    BCAST(A_rows, UNSIGNED_LONG);
+    BCAST(A_columns, UNSIGNED_LONG);
+    BCAST(A_values, DOUBLE);
+
+    std::fill(correctY.begin(), correctY.end(), 0.0); // every rank sets Y to 0
+    std::fill(testY.begin(), testY.end(), 0.0); // every rank sets Y to 0
+
+    for (int i = 0; i < X_rows.size(); i += 1) {
+        X[i] = {X_rows[i], X_columns[i], X_values[i]};
+    }
+    sortCOOElements(X);
+
+    for (int i = 0; i < A_rows.size(); i += 1) {
+        A[i] = {A_rows[i], A_columns[i], A_values[i]};
+    }
+    sortCOOElements(A);
+
+    // compute correct result
+    correctSpmm(A, X, correctY, TEST_SIZE, TEST_SIZE, TEST_SIZE);
+
+    // compute test result
+    submission::spmm(A, X, testY, TEST_SIZE, TEST_SIZE, TEST_SIZE);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !fequal(correctY, testY, 1e-4)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -150,7 +278,7 @@ bool validate(Context *ctx) {
         correctSpmm(A, X, correctY, TEST_SIZE, TEST_SIZE, TEST_SIZE);
 
         // compute test result
-        spmm(A, X, testY, TEST_SIZE, TEST_SIZE, TEST_SIZE);
+	submission::spmm(A, X, testY, TEST_SIZE, TEST_SIZE, TEST_SIZE);
         SYNC();
         
         bool isCorrect = true;
@@ -164,6 +292,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

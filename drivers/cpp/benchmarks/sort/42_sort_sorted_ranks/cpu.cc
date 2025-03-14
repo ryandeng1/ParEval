@@ -26,8 +26,12 @@ struct Context {
     std::vector<size_t> ranks;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -100.0, 100.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, -100.0, 100.0);
     BCAST(ctx->x, FLOAT);
 }
 
@@ -37,20 +41,20 @@ Context *init() {
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
     ctx->ranks.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    ranks(ctx->x, ctx->ranks);
+    submission::ranks(ctx->x, ctx->ranks);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctRanks(ctx->x, ctx->ranks);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<float> x(TEST_SIZE);
     std::vector<size_t> correct(TEST_SIZE), test(TEST_SIZE);
@@ -58,6 +62,29 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    std::uniform_real_distribution<> dist(-100.0, 100.0);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(x.begin(), x.end(), gen);
+
+    // set up input
+    // fillRand(x, -100.0, 100.0);
+    BCAST(x, FLOAT);
+
+    // compute correct result
+    correctRanks(x, correct);
+
+    // compute test result
+    submission::ranks(x, test);
+    SYNC();
+        
+    if (IS_ROOT(rank) && !std::equal(correct.begin(), correct.end(), test.begin())) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -68,7 +95,7 @@ bool validate(Context *ctx) {
         correctRanks(x, correct);
 
         // compute test result
-        ranks(x, test);
+	submission::ranks(x, test);
         SYNC();
         
         if (IS_ROOT(rank) && !std::equal(correct.begin(), correct.end(), test.begin())) {
@@ -77,6 +104,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

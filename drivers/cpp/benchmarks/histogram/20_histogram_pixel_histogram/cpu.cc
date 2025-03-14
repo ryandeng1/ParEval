@@ -25,8 +25,14 @@ struct Context {
     std::array<size_t, 256> bins;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->image, 0, 255);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(0, 255);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->image.begin(), ctx->image.end(), gen);
+
+    // fillRand(ctx->image, 0, 255);
     BCAST(ctx->image, INT);
 
     ctx->bins.fill(0);
@@ -37,20 +43,20 @@ Context *init() {
 
     ctx->image.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    pixelCounts(ctx->image, ctx->bins);
+    submission::pixelCounts(ctx->image, ctx->bins);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctPixelCounts(ctx->image, ctx->bins);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<int> image(TEST_SIZE);
     std::array<size_t, 256> correct, test;
@@ -58,6 +64,37 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_int_distribution<> dist(0, 255);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(image.begin(), image.end(), gen);
+    // fillRand(image, 0, 255);
+    BCAST(image, INT);
+
+    std::fill(correct.begin(), correct.end(), 0);
+    std::fill(test.begin(), test.end(), 0);
+
+    // compute correct result
+    correctPixelCounts(image, correct);
+
+    // compute test result
+    submission::pixelCounts(image, test);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !std::equal(correct.begin(), correct.end(), test.begin())) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -71,7 +108,7 @@ bool validate(Context *ctx) {
         correctPixelCounts(image, correct);
 
         // compute test result
-        pixelCounts(image, test);
+	submission::pixelCounts(image, test);
         SYNC();
         
         bool isCorrect = true;
@@ -85,6 +122,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

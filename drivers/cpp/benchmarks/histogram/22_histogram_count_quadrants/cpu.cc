@@ -28,13 +28,18 @@ struct Context {
     std::vector<double> x, y;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -1.0, 1.0);
-    fillRand(ctx->y, -1.0, 1.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-1.0, 1.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    std::generate(ctx->y.begin(), ctx->y.end(), gen);
+    // fillRand(ctx->x, -1.0, 1.0);
+    // fillRand(ctx->y, -1.0, 1.0);
     BCAST(ctx->x, DOUBLE);
     BCAST(ctx->y, DOUBLE);
 
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
     for (int i = 0; i < ctx->points.size(); i += 1) {
         ctx->points[i].x = ctx->x[i];
         ctx->points[i].y = ctx->y[i];
@@ -49,20 +54,20 @@ Context *init() {
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
     ctx->y.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    countQuadrants(ctx->points, ctx->bins);
+    submission::countQuadrants(ctx->points, ctx->bins);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctCountQuadrants(ctx->points, ctx->bins);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<Point> points(TEST_SIZE);
     std::array<size_t, 4> correct, test;
@@ -71,6 +76,43 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(-1.0, 1.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
+    std::generate(y.begin(), y.end(), gen);
+    // fillRand(x, -1.0, 1.0);
+    // fillRand(y, -1.0, 1.0);
+    BCAST(x, DOUBLE);
+    BCAST(y, DOUBLE);
+
+    for (int j = 0; j < points.size(); j += 1) {
+        points[j].x = x[j];
+        points[j].y = y[j];
+    }
+    correct.fill(0);
+    test.fill(0);
+
+    // compute correct result
+    correctCountQuadrants(points, correct);
+
+    // compute test result
+    submission::countQuadrants(points, test);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !std::equal(correct.begin(), correct.end(), test.begin())) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -90,7 +132,7 @@ bool validate(Context *ctx) {
         correctCountQuadrants(points, correct);
 
         // compute test result
-        countQuadrants(points, test);
+	submission::countQuadrants(points, test);
         SYNC();
         
         bool isCorrect = true;
@@ -104,6 +146,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

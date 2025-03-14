@@ -25,8 +25,13 @@ struct Context {
     std::vector<bool> mask;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, 1, 1025);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(1, 1025);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, 1, 1025);
     BCAST(ctx->x, INT);
 }
 
@@ -34,23 +39,52 @@ Context *init() {
     Context *ctx = new Context();
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
     ctx->mask.resize(DRIVER_PROBLEM_SIZE);
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    mapPowersOfTwo(ctx->x, ctx->mask);
+    submission::mapPowersOfTwo(ctx->x, ctx->mask);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctMapPowersOfTwo(ctx->x, ctx->mask);
 }
 
-bool validate(Context *ctx) {
-
+bool validate(Context *ctx, std::mt19937& engine) {
     int rank;
     GET_RANK(rank);
 
+    std::vector<int> input(DRIVER_PROBLEM_SIZE);
+    std::uniform_int_distribution<> dist(1, 1025);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(input.begin(), input.end(), gen);
+    // fillRand(input, 1, 1025);
+    BCAST(input, INT);
+
+    // compute correct result
+    std::vector<bool> correctResult(input.size());
+    correctMapPowersOfTwo(input, correctResult);
+
+    // compute test result
+    std::vector<bool> testResult(input.size());
+    submission::mapPowersOfTwo(input, testResult);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !std::equal(correctResult.begin(), correctResult.end(), testResult.begin())) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         std::vector<int> input(1024);
@@ -63,7 +97,7 @@ bool validate(Context *ctx) {
 
         // compute test result
         std::vector<bool> testResult(input.size());
-        mapPowersOfTwo(input, testResult);
+	submission::mapPowersOfTwo(input, testResult);
         SYNC();
         
         bool isCorrect = true;
@@ -77,6 +111,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

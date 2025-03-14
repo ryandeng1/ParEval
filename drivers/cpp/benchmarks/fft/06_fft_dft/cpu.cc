@@ -23,8 +23,13 @@ struct Context {
     std::vector<std::complex<double>> output;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -1.0, 1.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-1.0, 1.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, -1.0, 1.0);
     BCAST(ctx->x, DOUBLE);
 }
 
@@ -34,20 +39,20 @@ Context *init() {
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
     ctx->output.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    dft(ctx->x, ctx->output);
+    submission::dft(ctx->x, ctx->output);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctDft(ctx->x, ctx->output);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> x(TEST_SIZE);
     std::vector<std::complex<double>> correct(TEST_SIZE), test(TEST_SIZE);
@@ -55,6 +60,45 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_real_distribution<> dist(-1.0, 1.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
+    // fillRand(x, -1.0, 1.0);
+    BCAST(x, DOUBLE);
+
+    // compute correct result
+    correctDft(x, correct);
+
+    // compute test result
+    submission::dft(x, test);
+    SYNC();
+
+    bool isCorrect = true;
+    if (IS_ROOT(rank)) {
+        for (int j = 0; j < x.size(); j += 1) {
+	    if (std::abs(correct[j].real() - test[j].real()) > 1e-4 || std::abs(correct[j].imag() - test[j].imag()) > 1e-4) {
+	        isCorrect = false;
+	        break;
+	    }
+
+            if (std::isnan(correct[j].real()) || std::isnan(correct[j].imag()) || std::isnan(test[j].real()) || std::isnan(test[j].imag())) {
+                isCorrect = false;
+                break;
+            }
+        }
+    }
+
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         // set up input
@@ -65,7 +109,7 @@ bool validate(Context *ctx) {
         correctDft(x, correct);
 
         // compute test result
-        dft(x, test);
+	submission::dft(x, test);
         SYNC();
         
         bool isCorrect = true;
@@ -84,6 +128,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

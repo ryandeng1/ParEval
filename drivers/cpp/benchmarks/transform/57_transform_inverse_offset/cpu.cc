@@ -22,31 +22,65 @@ struct Context {
     std::vector<double> x;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -50.0, 50.0);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_real_distribution<> dist(-50.0, 50.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, -50.0, 50.0);
     BCAST(ctx->x, DOUBLE);
 }
 
 Context *init() {
     Context *ctx = new Context();
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    oneMinusInverse(ctx->x);
+    submission::oneMinusInverse(ctx->x);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctOneMinusInverse(ctx->x);
 }
 
-bool validate(Context *ctx) {
-
+bool validate(Context *ctx, std::mt19937& engine) {
     int rank;
     GET_RANK(rank);
 
+    std::vector<double> input(DRIVER_PROBLEM_SIZE);
+    std::uniform_real_distribution<> dist(-50.0, 50.0);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(input.begin(), input.end(), gen);
+    // fillRand(input, -50.0, 50.0);
+    BCAST(input, DOUBLE);
+
+    // compute correct result
+    std::vector<double> correctResult = input;
+    correctOneMinusInverse(correctResult);
+
+    // compute test result
+    std::vector<double> testResult = input;
+    submission::oneMinusInverse(testResult);
+    SYNC();
+        
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !fequal(correctResult, testResult, 1e-5)) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int i = 0; i < numTries; i += 1) {
         std::vector<double> input(1024);
@@ -59,7 +93,7 @@ bool validate(Context *ctx) {
 
         // compute test result
         std::vector<double> testResult = input;
-        oneMinusInverse(testResult);
+	submission::oneMinusInverse(testResult);
         SYNC();
         
         bool isCorrect = true;
@@ -73,6 +107,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

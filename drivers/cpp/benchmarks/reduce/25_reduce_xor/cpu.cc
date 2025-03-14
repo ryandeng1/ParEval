@@ -36,19 +36,17 @@ void bcastBools(std::vector<bool> &x) {
     #endif
 }
 
-/*
-void reset(Context *ctx) {
-    for (int i = 0; i < ctx->x.size(); i += 1) {
-        ctx->x[i] = rand() % 2;
-    }
-    bcastBools(ctx->x);
-}
-*/
-void reset(Context *ctx) {
-    #pragma omp parallel for num_threads(NUM_THREADS_SETUP)
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(0, 1);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    /*
     for (int i = 0; i < ctx->x.size(); i += 1) {
         ctx->x[i] = get_random_bit();
     }
+    */
     bcastBools(ctx->x);
 }
 
@@ -57,12 +55,12 @@ Context *init() {
 
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    bool out = reduceLogicalXOR(ctx->x);
+    bool out = submission::reduceLogicalXOR(ctx->x);
     (void) out;
 }
 
@@ -71,8 +69,8 @@ void NO_OPTIMIZE best(Context *ctx) {
     (void) out;
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<bool> x (TEST_SIZE);
     bool correct, test;
@@ -80,6 +78,38 @@ bool validate(Context *ctx) {
     int rank;
     GET_RANK(rank);
 
+    std::uniform_int_distribution<> dist(0, 1);
+
+    auto gen = [&](){ return dist(engine); };
+
+    std::generate(x.begin(), x.end(), gen);
+
+    // set up input
+    /*
+    for (int i = 0; i < TEST_SIZE; i += 1) {
+        x[i] = rand() % 2;
+    }
+    */
+    bcastBools(x);
+
+    // compute correct result
+    correct = correctReduceLogicalXOR(x);
+
+    // compute test result
+    test = submission::reduceLogicalXOR(x);
+    SYNC();
+
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && correct != test) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -92,7 +122,7 @@ bool validate(Context *ctx) {
         correct = correctReduceLogicalXOR(x);
 
         // compute test result
-        test = reduceLogicalXOR(x);
+        test = submission::reduceLogicalXOR(x);
         SYNC();
 
         bool isCorrect = true;
@@ -106,6 +136,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {

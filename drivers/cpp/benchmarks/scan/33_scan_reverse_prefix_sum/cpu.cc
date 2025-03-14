@@ -25,8 +25,12 @@ struct Context {
     std::vector<int> output;
 };
 
-void reset(Context *ctx) {
-    fillRand(ctx->x, -100, 100);
+void reset(Context *ctx, std::mt19937& engine) {
+    std::uniform_int_distribution<> dist(-100, 100);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(ctx->x.begin(), ctx->x.end(), gen);
+    // fillRand(ctx->x, -100, 100);
     BCAST(ctx->x, INT);
 }
 
@@ -36,26 +40,53 @@ Context *init() {
     ctx->x.resize(DRIVER_PROBLEM_SIZE);
     ctx->output.resize(DRIVER_PROBLEM_SIZE);
 
-    reset(ctx);
+    // reset(ctx);
     return ctx;
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    reversePrefixSum(ctx->x, ctx->output);
+    submission::reversePrefixSum(ctx->x, ctx->output);
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     correctReversePrefixSum(ctx->x, ctx->output);
 }
 
-bool validate(Context *ctx) {
-    const size_t TEST_SIZE = 1024;
+bool validate(Context *ctx, std::mt19937& engine) {
+    const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<int> x(TEST_SIZE), correct(TEST_SIZE), test(TEST_SIZE);
 
     int rank;
     GET_RANK(rank);
 
+    // set up input
+    std::uniform_int_distribution<> dist(-100, 100);
+
+    auto gen = [&](){ return dist(engine); };
+    std::generate(x.begin(), x.end(), gen);
+    // fillRand(x, -100, 100);
+    BCAST(x, INT);
+
+    // compute correct result
+    correctReversePrefixSum(x, correct);
+
+    // compute test result
+    submission::reversePrefixSum(x, test);
+    SYNC();
+
+    bool isCorrect = true;
+    if (IS_ROOT(rank) && !std::equal(correct.begin(), correct.end(), test.begin())) {
+        isCorrect = false;
+    }
+    BCAST_PTR(&isCorrect, 1, CXX_BOOL);
+    if (!isCorrect) {
+        return false;
+    }
+
+    return true;
+
+    /*
     const size_t numTries = MAX_VALIDATION_ATTEMPTS;
     for (int trialIter = 0; trialIter < numTries; trialIter += 1) {
         // set up input
@@ -66,7 +97,7 @@ bool validate(Context *ctx) {
         correctReversePrefixSum(x, correct);
 
         // compute test result
-        reversePrefixSum(x, test);
+	submission::reversePrefixSum(x, test);
         SYNC();
 
         bool isCorrect = true;
@@ -80,6 +111,7 @@ bool validate(Context *ctx) {
     }
 
     return true;
+    */
 }
 
 void destroy(Context *ctx) {
