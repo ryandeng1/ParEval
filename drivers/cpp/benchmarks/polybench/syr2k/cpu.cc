@@ -33,7 +33,7 @@ void reset(Context *ctx, std::mt19937& engine) {
     for (int i = 0; i < ctx->n; i++) {
 	for (int j = 0; j < ctx->m; j++) {
 	    ctx->A[i][j] = ((i*j+1)%ctx->n) * 1.0 / ctx->n;
-	    ctx->A[i][j] = ((i*j+2)%ctx->m) * 1.0 / ctx->m;
+	    ctx->B[i][j] = ((i*j+2)%ctx->m) * 1.0 / ctx->m;
 	}
     }
 
@@ -107,14 +107,14 @@ bool validate(Context *ctx, std::mt19937& engine) {
     for (int i = 0; i < n; i++) {
 	for (int j = 0; j < m; j++) {
 	    A[i][j] = ((i*j+1)%n) * 1.0 / n;
-	    A[i][j] = ((i*j+2)%m) * 1.0 / m;
+	    B[i][j] = ((i*j+2)%m) * 1.0 / m;
 	}
     }
 
     for (int i = 0; i < n; i++) {
 	for (int j = 0; j < n; j++) {
 	    C[i][j] = ((i*j+3)%n) * 1.0 / m;
-	    C_test[i][j] = ((i*j+3)%n) * 1.0 / m;
+	    C_test[i][j] = C[i][j];
 	}
     }
     

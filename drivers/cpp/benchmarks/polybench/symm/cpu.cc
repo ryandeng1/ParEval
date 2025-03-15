@@ -111,7 +111,7 @@ bool validate(Context *ctx, std::mt19937& engine) {
     for (int i = 0; i < m; i++) {
 	for (int j = 0; j < n; j++) {
 	    C[i][j] = ((i*j) % 100) * 1.0 / m;
-	    C_test[i][j] = ((i*j) % 100) * 1.0 / m;
+	    C_test[i][j] = C[i][j];
 	    B[i][j] = ((n+i-j) % 100) * 1.0 / m;
 	}
     }

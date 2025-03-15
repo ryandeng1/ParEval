@@ -45,8 +45,8 @@ void reset(Context *ctx, std::mt19937& engine) {
 Context *init() {
     Context *ctx = new Context();
 
-    ctx->m = DRIVER_PROBLEM_SIZE;
-    ctx->n = DRIVER_PROBLEM_SIZE / 2;
+    ctx->n = DRIVER_PROBLEM_SIZE;
+    ctx->m = DRIVER_PROBLEM_SIZE / 2;
 
     ctx->A.resize(ctx->m);
     ctx->Q.resize(ctx->m);
@@ -75,8 +75,8 @@ void NO_OPTIMIZE best(Context *ctx) {
 bool validate(Context *ctx, std::mt19937& engine) {
     const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
-    int m = TEST_SIZE;
-    int n = TEST_SIZE / 2;
+    int n = TEST_SIZE;
+    int m = TEST_SIZE / 2;
 
     std::vector<std::vector<double>> A, R, Q;
     std::vector<std::vector<double>> A_test, R_test, Q_test;
