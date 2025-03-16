@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <string>
 #include <cfloat>
+#include <random>
 
 class Context;
 extern "C++" {
@@ -23,8 +24,8 @@ extern "C++" {
     Context *init();
     void compute(Context *ctx);
     void best(Context *ctx);
-    bool validate(Context *ctx);
-    void reset(Context *ctx);
+    bool validate(Context *ctx, std::mt19937& engine);
+    void reset(Context *ctx, std::mt19937& engine);
     void destroy(Context *ctx);
 }
 
@@ -36,7 +37,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    int NITER = 5;
+    int NITER = 10;
     if (argc > 1) {
         NITER = std::stoi(std::string(argv[1]));
     }
@@ -44,36 +45,77 @@ int main(int argc, char **argv) {
     /* initialize */
     Context *ctx = init();
 
+    std::mt19937 engine;
+
+    for (int i = 0; i < NITER; i += 1) {
+        engine.seed(i);
+
+        const bool isValid = validate(ctx, engine);
+        if (!isValid) {
+            printf("Validation: FAIL\n");
+            destroy(ctx);
+            return 0;
+        }
+    }
+
+    printf("Validation: PASS\n");
+
     /* validate */
+    /*
     const bool isValid = validate(ctx);
     printf("Validation: %s\n", isValid ? "PASS" : "FAIL");
     if (!isValid) {
         destroy(ctx);
         return 0;
     }
+    */
+
+    const int NUM_WARMUP_ITER = 3;
+
+    for (int i = 0; i < NUM_WARMUP_ITER; i++) {
+        engine.seed(i);
+        reset(ctx, engine);
+        compute(ctx);
+    }
 
     /* benchmark */
     double totalTime = 0.0;
     for (int i = 0; i < NITER; i += 1) {
+        engine.seed(i);
+        reset(ctx, engine);
+
         auto start = std::chrono::high_resolution_clock::now();
         compute(ctx);
         auto end = std::chrono::high_resolution_clock::now();
-        totalTime += std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
-    
-        reset(ctx);
+        totalTime += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        // totalTime += std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+        // reset(ctx);
     }
+    // convert back to seconds
+    totalTime = totalTime / 1e6;
     printf("Time: %.*f\n", DBL_DIG-1, totalTime / NITER);
+
+    for (int i = 0; i < NUM_WARMUP_ITER; i++) {
+	engine.seed(i);
+        reset(ctx, engine);
+        best(ctx);
+    }
 
     /* benchmark best */
     totalTime = 0.0;
     for (int i = 0; i < NITER; i += 1) {
+        engine.seed(i);
+        reset(ctx, engine);
+
         auto start = std::chrono::high_resolution_clock::now();
         best(ctx);
         auto end = std::chrono::high_resolution_clock::now();
-        totalTime += std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
-
-        reset(ctx);
+        totalTime += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        // totalTime += std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+        // reset(ctx);
     }
+    // convert back to seconds
+    totalTime = totalTime / 1e6;
     printf("BestSequential: %.*f\n", DBL_DIG-1, totalTime / NITER);
 
     /* cleanup */
@@ -81,3 +123,4 @@ int main(int argc, char **argv) {
 
     return 0;
 }
+
