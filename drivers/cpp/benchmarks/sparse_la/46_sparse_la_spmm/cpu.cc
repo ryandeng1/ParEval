@@ -57,6 +57,7 @@ void reset(Context *ctx, std::mt19937& engine) {
     ctx->X_rows.clear();
     ctx->X_columns.clear();
     ctx->X_values.clear();
+
     for (size_t i = 0; i < ctx->K; i++) {
 	for (size_t j = 0; j < ctx->N; j++) {
 	    auto prob = prob_gen();
@@ -70,6 +71,8 @@ void reset(Context *ctx, std::mt19937& engine) {
 	    ctx->X_values.push_back(value);
 	}
     }
+
+    ctx->X.resize(ctx->X_rows.size());
 
     ctx->A_rows.clear();
     ctx->A_columns.clear();
@@ -88,6 +91,8 @@ void reset(Context *ctx, std::mt19937& engine) {
 	}
     }
 
+    ctx->A.resize(ctx->A_rows.size());
+
     BCAST(ctx->X_rows, UNSIGNED_LONG);
     BCAST(ctx->X_columns, UNSIGNED_LONG);
     BCAST(ctx->X_values, DOUBLE);
@@ -98,12 +103,12 @@ void reset(Context *ctx, std::mt19937& engine) {
     std::fill(ctx->Y.begin(), ctx->Y.end(), 0.0); // every rank sets Y to 0
 
     for (int i = 0; i < ctx->X_rows.size(); i += 1) {
-        ctx->X.push_back({ctx->X_rows[i], ctx->X_columns[i], ctx->X_values[i]});
+        ctx->X[i] = {ctx->X_rows[i], ctx->X_columns[i], ctx->X_values[i]};
     }
     sortCOOElements(ctx->X);
 
     for (int i = 0; i < ctx->A_rows.size(); i += 1) {
-        ctx->A.push_back({ctx->A_rows[i], ctx->A_columns[i], ctx->A_values[i]});
+        ctx->A[i] = {ctx->A_rows[i], ctx->A_columns[i], ctx->A_values[i]};
     }
     sortCOOElements(ctx->A);
 }

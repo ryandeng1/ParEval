@@ -26,12 +26,11 @@ struct Context {
 
 void reset(Context *ctx, std::mt19937& engine) {
     /* for this it doesn't matter if every process has the same data */
-    // const std::string characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     const std::string characters = "abcdefghijklmnopqrstuvwxyz";
     std::uniform_int_distribution<> char_dist(0, 25);
     std::uniform_int_distribution<> len_dist(5, 15);
     auto gen = [&](){
-	auto len = char_dist(engine);
+	auto len = len_dist(engine);
 	std::string randomString;
         for (int i = 0; i < len; i++) {
             randomString += characters[char_dist(engine)];
@@ -41,7 +40,7 @@ void reset(Context *ctx, std::mt19937& engine) {
 
     std::generate(ctx->titles.begin(), ctx->titles.end(), gen);
 
-    std::uniform_int_distribution<> dist(1, 1e6);
+    std::uniform_int_distribution<> dist(1, 1e9);
     auto gen_pages = [&](){
 	return dist(engine);
     };
@@ -90,7 +89,7 @@ bool validate(Context *ctx, std::mt19937& engine) {
     std::vector<int> pages(DRIVER_PROBLEM_SIZE);
     std::vector<Book> input(DRIVER_PROBLEM_SIZE);
 
-    std::uniform_int_distribution<> dist(1, 1e6);
+    std::uniform_int_distribution<> dist(1, 1e9);
     auto gen_pages = [&](){
 	return dist(engine);
     };

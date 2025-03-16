@@ -27,19 +27,19 @@ struct Context {
 };
 
 void reset(Context *ctx, std::mt19937& engine) {
-    std::uniform_int_distribution<> dist(-1e6, 1e6);
-    auto gen = [&](){ return dist(engine); };
-
     std::uniform_int_distribution<> rand_bit_dist(0, 1);
     auto rand_bit = rand_bit_dist(engine);
 
+    std::uniform_int_distribution<> dist(-1e8, 1e8);
+    auto gen = [&](){ return dist(engine); };
+
     std::generate(ctx->x.begin(), ctx->x.end(), gen);
-    if (rand_bit) {
+    if (rand_bit == 0) {
         std::uniform_int_distribution<> idx_dist(0, ctx->x.size() - 1);
 	auto rand_idx = idx_dist(engine);
 	ctx->target = ctx->x[rand_idx];
     } else {
-	ctx->target = 1e6 + 1;
+	ctx->target = 1e8 + 1;
     }
 
     // fillRand(ctx->x, -50, 50);
@@ -71,7 +71,7 @@ bool validate(Context *ctx, std::mt19937& engine) {
 
     std::vector<int> input(DRIVER_PROBLEM_SIZE);
 
-    std::uniform_int_distribution<> dist(-1e6, 1e6);
+    std::uniform_int_distribution<> dist(-1e8, 1e8);
     auto gen = [&](){ return dist(engine); };
 
     std::generate(input.begin(), input.end(), gen);
@@ -79,7 +79,7 @@ bool validate(Context *ctx, std::mt19937& engine) {
     auto rand_idx = idx_dist(engine);
 
     // target not in list
-    int target = 1e6 + 1;
+    int target = 1e8 + 1;
     BCAST(input, INT);
     BCAST_PTR(&target, 1, INT);
 

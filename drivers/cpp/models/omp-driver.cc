@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    const int NITER = 5;
+    const int NITER = 10;
     int num_threads = 1;
     if (argc > 1) {
         num_threads = std::stoi(std::string(argv[1]));

@@ -26,14 +26,12 @@ struct Context {
 
 void reset(Context *ctx, std::mt19937& engine) {
     std::uniform_int_distribution<> dist(1, 20);
-    auto gen = [&](){ return dist(engine); };
+    // this ensures all of the numbers generated are odd.
+    auto gen = [&](){ return 2 * dist(engine) + 1; };
 
     std::generate(ctx->x.begin(), ctx->x.end(), gen);
 
     // fillRand(ctx->x, 1, 20);
-    for (int i = 0; i < ctx->x.size(); i += 1) {
-        ctx->x[i] = 2 * ctx->x[i] + 1;  // make everything odd
-    }
     // make two values in the middle quadrants even
     // size_t min = ctx->x.size() / 4;
     // size_t max = 3 * ctx->x.size() / 4;
@@ -41,10 +39,14 @@ void reset(Context *ctx, std::mt19937& engine) {
     // ctx->x[rand() % (max - min) + min] += 1;
 
     std::uniform_int_distribution<> idx_dist(ctx->x.size() / 4, ctx->x.size() * 3 / 4);
+    int idx = idx_dist(engine);
+    ctx->x[idx] += 1;
+    /*
     for (int i = 0; i < ctx->x.size() / 8; i++) {
 	int idx = idx_dist(engine);
         ctx->x[idx] += 1;
     }
+    */
 
     BCAST(ctx->x, INT);
 }
@@ -77,20 +79,22 @@ bool validate(Context *ctx, std::mt19937& engine) {
     // set up input
     std::vector<int> x(DRIVER_PROBLEM_SIZE);
     std::uniform_int_distribution<> dist(1, 20);
-    auto gen = [&](){ return dist(engine); };
+    // makes everything odd
+    auto gen = [&](){ return 2 * dist(engine) + 1; };
 
     std::generate(x.begin(), x.end(), gen);
 
     // fillRand(ctx->x, 1, 20);
-    for (int i = 0; i < x.size(); i += 1) {
-        x[i] = 2 * x[i] + 1;  // make everything odd
-    }
 
     std::uniform_int_distribution<> idx_dist(x.size() / 4, x.size() * 3 / 4);
+    int idx = idx_dist(engine);
+    x[idx] += 1;
+    /*
     for (int i = 0; i < x.size() / 8; i++) {
 	int idx = idx_dist(engine);
         x[idx] += 1;
     }
+    */
 
     BCAST(x, INT);
 

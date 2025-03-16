@@ -28,16 +28,18 @@ struct Context {
 };
 
 void reset(Context *ctx, std::mt19937& engine) {
-    std::uniform_int_distribution<> dist(-1e6, 1e6);
+    std::uniform_int_distribution<> rand_bit_dist(0, 1);
+    auto rand_bit = rand_bit_dist(engine);
+
+    std::uniform_int_distribution<> dist(-1e8, 1e8);
     auto gen = [&](){ return dist(engine); };
 
     std::generate(ctx->x.begin(), ctx->x.end(), gen);
     std::generate(ctx->y.begin(), ctx->y.end(), gen);
 
-    std::uniform_int_distribution<> rand_bit_dist(0, 1);
-    auto rand_bit = rand_bit_dist(engine);
+    std::cout << "rand bit: " << rand_bit << std::endl;
 
-    if (rand_bit) {
+    if (rand_bit == 0) {
         std::uniform_int_distribution<> idx_dist(0, ctx->x.size() - 1);
 	auto rand_idx_x = idx_dist(engine);
 	auto rand_idx_y = idx_dist(engine);
@@ -88,7 +90,7 @@ bool validate(Context *ctx, std::mt19937& engine) {
     std::vector<int> x(TEST_SIZE);
     std::vector<int> y(TEST_SIZE);
 
-    std::uniform_int_distribution<> dist(-1e6, 1e6);
+    std::uniform_int_distribution<> dist(-1e8, 1e8);
     auto gen = [&](){ return dist(engine); };
 
     std::generate(x.begin(), x.end(), gen);
