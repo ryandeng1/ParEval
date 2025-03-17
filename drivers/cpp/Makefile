@@ -1,6 +1,6 @@
 CXX = g++
 MPICXX = mpicxx
-CXX_FLAGS = -std=c++17 -O3
+CXX_FLAGS = -std=c++17 -O3 -I ./
 Kokkos_PATH ?= ../../tpl/kokkos/build
 
 HAS_MPICXX := $(shell command -v mpicxx 2> /dev/null)

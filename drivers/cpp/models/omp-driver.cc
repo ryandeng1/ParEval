@@ -11,6 +11,7 @@
 * These functions are defined in the driver for the given benchmark and handle
 * the data and calling the generated code.
 */
+#define ANKERL_NANOBENCH_IMPLEMENT
 #include <cstdio>
 #include <string>
 #include <cfloat>
@@ -18,6 +19,7 @@
 #include <omp.h>
 #include <chrono>
 #include <random>
+#include <nanobench.h>
 
 class Context;
 extern "C++" {
@@ -76,18 +78,21 @@ int main(int argc, char **argv) {
 
     const int NUM_WARMUP_ITER = 3;
 
+    /*
     for (int i = 0; i < NUM_WARMUP_ITER; i++) {
 	engine.seed(i);
         reset(ctx, engine);
         compute(ctx);
     }
 
-    /* benchmark */
+
+    // benchmark 
     double totalTime = 0.0;
     for (int i = 0; i < NITER; i += 1) {
 	engine.seed(i);
         reset(ctx, engine);
 
+	
         double start = omp_get_wtime();
         compute(ctx);
         totalTime += omp_get_wtime() - start;
@@ -96,13 +101,13 @@ int main(int argc, char **argv) {
     // printf("Time: %.*f\n", DBL_DIG-1, totalTime / NITER);
     printf("Time: %.17g\n", totalTime / NITER);
 
+    // benchmark best
     for (int i = 0; i < NUM_WARMUP_ITER; i++) {
 	engine.seed(i);
         reset(ctx, engine);
         best(ctx);
     }
 
-    /* benchmark best */
     totalTime = 0.0;
     for (int i = 0; i < NITER; i += 1) {
 	engine.seed(i);
@@ -113,6 +118,52 @@ int main(int argc, char **argv) {
         totalTime += omp_get_wtime() - start;
     }
     printf("BestSequential: %.*f\n", DBL_DIG-1, totalTime / NITER);
+    */
+
+    ankerl::nanobench::Bench bench_llm;
+    bench_llm.warmup(3);
+    for (int i = 0; i < NITER; i += 1) {
+	engine.seed(i);
+        reset(ctx, engine);
+
+	bench_llm.run("llm code", [&]() {
+	    compute(ctx);
+	});
+    }
+
+    std::vector<double> runtimes_llm;
+    for (int i = 0; i < NITER; i++) {
+        auto const& r_llm = bench_llm.results()[i];
+        auto time_llm = r_llm.median(ankerl::nanobench::Result::Measure::elapsed);
+	runtimes_llm.push_back(time_llm);
+    }
+
+    auto avg_time_llm = std::reduce(runtimes_llm.begin(), runtimes_llm.end()) / static_cast<double>(NITER);
+
+    printf("Time: %.17g\n", avg_time_llm);
+
+    ankerl::nanobench::Bench bench_baseline;
+    bench_baseline.warmup(3);
+    for (int i = 0; i < NITER; i += 1) {
+	engine.seed(i);
+        reset(ctx, engine);
+
+	// ankerl::nanobench::Bench().run("baseline code", [&]() {
+	bench_baseline.run("baseline code", [&]() {
+	    best(ctx);
+	});
+    }
+
+    std::vector<double> runtimes_baseline;
+    for (int i = 0; i < NITER; i++) {
+        auto const& r_baseline = bench_baseline.results()[i];
+        auto time_baseline = r_baseline.median(ankerl::nanobench::Result::Measure::elapsed);
+	runtimes_baseline.push_back(time_baseline);
+    }
+
+    auto avg_time_baseline = std::reduce(runtimes_baseline.begin(), runtimes_baseline.end()) / static_cast<double>(NITER);
+
+    printf("BestSequential: %.*f\n", DBL_DIG-1, avg_time_baseline);
 
     /* cleanup */
     destroy(ctx);
