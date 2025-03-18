@@ -169,7 +169,6 @@ class CppDriverWrapper(DriverWrapper):
             binaries_str = ' '.join(binaries)
             macro = f"-DUSE_{self.parallelism_model.upper()}"
             cmd = f"{CXX} {CXXFLAGS} -Icpp -Icpp/models {macro} {binaries_str} -o {output_path}"
-            print("COMPILE COMMAND", cmd)
             try:
                 compile_process = run_command(cmd, timeout=self.build_timeout, dry=self.dry)
             except subprocess.TimeoutExpired as e:
