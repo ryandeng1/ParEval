@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
     */
 
     ankerl::nanobench::Bench bench_llm;
-    bench_llm.warmup(3);
+    // bench_llm.warmup(NUM_WARMUP_ITER);
     for (int i = 0; i < NITER; i += 1) {
 	engine.seed(i);
         reset(ctx, engine);
@@ -143,7 +143,7 @@ int main(int argc, char **argv) {
     printf("Time: %.17g\n", avg_time_llm);
 
     ankerl::nanobench::Bench bench_baseline;
-    bench_baseline.warmup(3);
+    // bench_baseline.warmup(NUM_WARMUP_ITER);
     for (int i = 0; i < NITER; i += 1) {
 	engine.seed(i);
         reset(ctx, engine);

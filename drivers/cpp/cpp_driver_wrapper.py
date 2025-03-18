@@ -34,9 +34,8 @@ DRIVER_MAP = {
 
 """ Compiler settings """
 COMPILER_SETTINGS = {
-    # use c++20 as fast random number generation requires it
     "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3"},
-    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3 -g -fopenmp -march=native"},
+    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -g -march=native "},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
     "mpi+omp": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
     "kokkos": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -I../tpl/kokkos/build/include ../tpl/kokkos/build/lib64/libkokkoscore.a ../tpl/kokkos/build/lib64/libkokkoscontainers.a ../tpl/kokkos/build/lib64/libkokkossimd.a"},
@@ -84,6 +83,39 @@ def wrap_with_namespace_gpt(code: str, namespace="submission") -> str:
         output.append(f"}} // namespace {namespace}\n")
 
     return "".join(output)
+
+def add_noinline_to_function(cpp_code, function_name):
+    # Regex pattern to match the specific function definition
+    function_pattern = re.compile(
+        rf'(\b(?:void|int|float|double|char|bool|long|short|unsigned|signed|auto|constexpr|inline|static)[\s*&]+)' # Return type
+        rf'({function_name})' # Specific function name
+        r'\s*\(' # Opening parenthesis for parameters
+    )
+
+    # Function to add NOINLINE macro between the return type and the function definition. This is mirrored after ParEval's implementation below.
+    def add_noinline(match):
+        return f"{match.group(1)}NO_INLINE {match.group(2)}("
+
+    # Apply the regex substitution
+    modified_code = function_pattern.sub(add_noinline, cpp_code)
+
+    return modified_code
+
+# In ParEval, the last line of the prompt used is the function definition.
+def extract_function_names_from_prompt(prompt: str):
+    last_line = prompt.split("\n")[-1]
+    # Regex pattern to match function definitions (excluding main and class methods)
+    function_pattern = re.compile(
+        r'\b(?:void|int|float|double|char|bool|long|short|unsigned|signed|auto|constexpr|inline|static)[\s*&]+'
+        r'([a-zA-Z_][a-zA-Z0-9_]*)'  # Capture function name
+        r'\s*\('  # Match opening parenthesis
+    )
+
+    # Extract all matching function names
+    function_names = function_pattern.findall(last_line)
+
+    assert len(function_names) == 1
+    return function_names[0]
 
 def build_kokkos(driver_src: PathLike, output_root: PathLike, problem_size: str = "(1<<20)"):
     """ Custom steps for the Kokkos programs, since they require cmake """
@@ -137,6 +169,7 @@ class CppDriverWrapper(DriverWrapper):
             binaries_str = ' '.join(binaries)
             macro = f"-DUSE_{self.parallelism_model.upper()}"
             cmd = f"{CXX} {CXXFLAGS} -Icpp -Icpp/models {macro} {binaries_str} -o {output_path}"
+            print("COMPILE COMMAND", cmd)
             try:
                 compile_process = run_command(cmd, timeout=self.build_timeout, dry=self.dry)
             except subprocess.TimeoutExpired as e:
@@ -169,12 +202,15 @@ class CppDriverWrapper(DriverWrapper):
             src_ext = "cuh" if self.parallelism_model in ["cuda", "hip"] else "hpp"
             src_path = os.path.join(tmpdir, f"generated-code.{src_ext}")
 
-            # include the entire C++ standard library as well as header for vectorization
-            include_header = "#pragma once\n#include <bits/stdc++.h>\n#include <immintrin.h>\n"
+            # include the C++ standard library as well as header for vectorization
+            # include_header = "#pragma once\n#include <bits/stdc++.h>\n#include <immintrin.h>\n"
+            include_header = ""
             if self.code_opt:
+                function_name = extract_function_names_from_prompt(prompt)
                 output_with_extra_headers = include_header + "\n" + output
                 output_with_namespace = wrap_with_namespace_gpt(output_with_extra_headers)
-                write_success = self.write_source(output_with_namespace, src_path)
+                add_noinline = add_noinline_to_function(output_with_namespace, function_name)
+                write_success = self.write_source(add_noinline, src_path)
             else:
                 prompt = self.patch_prompt(prompt)
                 write_success = self.write_source(include_header+"\n"+prompt+"\n"+output, src_path)
@@ -211,6 +247,8 @@ class CppDriverWrapper(DriverWrapper):
                     # print("RUN RESULT: ", run_result)
                     # print("STDOUT: ", run_result.stdout)
                     # print("STDERR: ", run_result.stderr)
+                    # print("--- OUTPUT ---")
+                    # print(add_noinline)
 
                     # exit code 0 means no runtime errors
                     if run_result.exit_code == 0 and run_result.is_valid:
