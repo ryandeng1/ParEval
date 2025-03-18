@@ -11,6 +11,7 @@
 * These functions are defined in the driver for the given benchmark and handle
 * the data and calling the generated code.
 */
+#define ANKERL_NANOBENCH_IMPLEMENT
 #include <chrono>
 #include <cstdio>
 #include <string>

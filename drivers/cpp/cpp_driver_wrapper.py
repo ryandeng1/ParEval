@@ -34,7 +34,7 @@ DRIVER_MAP = {
 
 """ Compiler settings """
 COMPILER_SETTINGS = {
-    "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++20 -O3"},
+    "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -g -march=native "},
     "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -g -march=native "},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
     "mpi+omp": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
