@@ -34,8 +34,10 @@ DRIVER_MAP = {
 
 """ Compiler settings """
 COMPILER_SETTINGS = {
-    "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -g -march=native "},
-    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -g -march=native "},
+    # "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -g -march=native "},
+    # "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -g -march=native "},
+    "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -g"},
+    "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -g"},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
     "mpi+omp": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
     "kokkos": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -I../tpl/kokkos/build/include ../tpl/kokkos/build/lib64/libkokkoscore.a ../tpl/kokkos/build/lib64/libkokkoscontainers.a ../tpl/kokkos/build/lib64/libkokkossimd.a"},
@@ -103,10 +105,11 @@ def add_noinline_to_function(cpp_code, function_name):
 
 # In ParEval, the last line of the prompt used is the function definition.
 def extract_function_names_from_prompt(prompt: str):
-    last_line = prompt.split("\n")[-1]
+    lines = prompt.split("\n")
+    last_line = [line for line in lines if len(line) > 0][-1]
     # Regex pattern to match function definitions (excluding main and class methods)
     function_pattern = re.compile(
-        r'\b(?:void|int|float|double|char|bool|long|short|unsigned|signed|auto|constexpr|inline|static)[\s*&]+'
+        r'\b(?:void|int|float|double|char|bool|long|short|unsigned|signed|auto|constexpr|inline|static|size_t)[\s*&]+'
         r'([a-zA-Z_][a-zA-Z0-9_]*)'  # Capture function name
         r'\s*\('  # Match opening parenthesis
     )
@@ -114,7 +117,7 @@ def extract_function_names_from_prompt(prompt: str):
     # Extract all matching function names
     function_names = function_pattern.findall(last_line)
 
-    assert len(function_names) == 1
+    assert len(function_names) == 1, f"prompt: {prompt}, lines: {lines}, last line: {last_line}, function_names: {function_names}"
     return function_names[0]
 
 def build_kokkos(driver_src: PathLike, output_root: PathLike, problem_size: str = "(1<<20)"):
@@ -208,6 +211,7 @@ class CppDriverWrapper(DriverWrapper):
                 function_name = extract_function_names_from_prompt(prompt)
                 output_with_extra_headers = include_header + "\n" + output
                 output_with_namespace = wrap_with_namespace_gpt(output_with_extra_headers)
+                # write_success = self.write_source(output_with_namespace, src_path)
                 add_noinline = add_noinline_to_function(output_with_namespace, function_name)
                 write_success = self.write_source(add_noinline, src_path)
             else:
