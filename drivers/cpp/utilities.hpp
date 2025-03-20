@@ -231,6 +231,21 @@ bool fequal(Vec const& a, Vec const& b, FType epsilon = 1e-6) {
     return true;
 }
 
+void generateRandomGraph(std::vector<int>& A, int N, int num_edges, bool is_directed, std::mt19937& engine) {
+    std::uniform_int_distribution<> vertex_dist(0, N - 1);
+
+    for (int i = 0; i < num_edges; i++) {
+	int u = vertex_dist(engine);
+	int v = vertex_dist(engine);
+	if (u != v) {
+            A[u * N + v] = 1;
+            if (!is_directed) {
+                A[v * N + u] = 1;
+            }
+	}
+    }
+}
+
 // Function to generate an R-MAT graph with any number of nodes
 void generateRMATGraph(std::vector<int>& A, int N, int numEdges, double a, double b, double c, double d, bool is_directed, std::mt19937& engine) {
     std::fill(A.begin(), A.end(), 0);
@@ -280,8 +295,10 @@ void generateRMATGraph(std::vector<int>& A, int N, int numEdges, double a, doubl
     }
 }
 
-void fillRandomUndirectedGraph_(std::vector<int> &A, size_t N, std::mt19937& engine) {
-    std::uniform_int_distribution<> e_dist(0, N * (N - 1) / 2);
+int fillRandomUndirectedGraph_(std::vector<int> &A, size_t N, std::mt19937& engine) {
+    std::fill(A.begin(), A.end(), 0);
+    int max_edges = N * (N - 1) / 2;
+    std::uniform_int_distribution<> e_dist(0, max_edges / 1000);
     int num_edges = e_dist(engine);
 
     double a = 0.45;
@@ -289,11 +306,16 @@ void fillRandomUndirectedGraph_(std::vector<int> &A, size_t N, std::mt19937& eng
     double c = 0.15;
     double d = 0.25;
     
-    generateRMATGraph(A, N, num_edges, a, b, c, d, false, engine);
+    // generateRMATGraph(A, N, num_edges, a, b, c, d, false, engine);
+    generateRandomGraph(A, N, num_edges, false, engine);
+
+    return num_edges;
 }
 
-void fillRandDirectedGraph_(std::vector<int> &A, size_t N, std::mt19937& engine) {
-    std::uniform_int_distribution<> e_dist(0, N * (N - 1));
+int fillRandDirectedGraph_(std::vector<int> &A, size_t N, std::mt19937& engine) {
+    std::fill(A.begin(), A.end(), 0);
+    int max_edges = N * (N - 1);
+    std::uniform_int_distribution<> e_dist(0, max_edges / 1000);
     int num_edges = e_dist(engine);
 
     double a = 0.45;
@@ -301,6 +323,9 @@ void fillRandDirectedGraph_(std::vector<int> &A, size_t N, std::mt19937& engine)
     double c = 0.15;
     double d = 0.25;
     
-    generateRMATGraph(A, N, num_edges, a, b, c, d, true, engine);
+    // generateRMATGraph(A, N, num_edges, a, b, c, d, true, engine);
+    generateRandomGraph(A, N, num_edges, true, engine);
+
+    return num_edges;
 }
 

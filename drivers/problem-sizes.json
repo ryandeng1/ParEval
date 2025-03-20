@@ -99,8 +99,8 @@
     "hip": "(1<<14)"
   },
   "11_geometry_convex_hull_perimeter": {
-    "serial": "(1<<14)",
-    "omp": "(1<<14)",
+    "serial": "(1<<20)",
+    "omp": "(1<<20)",
     "mpi": "(1<<14)",
     "mpi+omp": "(1<<14)",
     "kokkos": "(1<<14)",
@@ -135,8 +135,8 @@
     "hip": "(1<<14)"
   },
   "15_graph_edge_count": {
-    "serial": "(1<<12)",
-    "omp": "(1<<12)",
+    "serial": "(1<<13)",
+    "omp": "(1<<13)",
     "mpi": "(1<<12)",
     "mpi+omp": "(1<<12)",
     "kokkos": "(1<<11)",
@@ -144,8 +144,8 @@
     "hip": "(1<<12)"
   },
   "16_graph_largest_component": {
-    "serial": "(1<<12)",
-    "omp": "(1<<12)",
+    "serial": "(1<<13)",
+    "omp": "(1<<13)",
     "mpi": "(1<<12)",
     "mpi+omp": "(1<<12)",
     "kokkos": "(1<<11)",
@@ -153,8 +153,8 @@
     "hip": "(1<<12)"
   },
   "17_graph_highest_degree": {
-    "serial": "(1<<12)",
-    "omp": "(1<<12)",
+    "serial": "(1<<13)",
+    "omp": "(1<<13)",
     "mpi": "(1<<12)",
     "mpi+omp": "(1<<12)",
     "kokkos": "(1<<12)",
@@ -162,8 +162,8 @@
     "hip": "(1<<12)"
   },
   "18_graph_count_components": {
-    "serial": "(1<<12)",
-    "omp": "(1<<12)",
+    "serial": "(1<<13)",
+    "omp": "(1<<13)",
     "mpi": "(1<<12)",
     "mpi+omp": "(1<<12)",
     "kokkos": "(1<<11)",
@@ -171,8 +171,8 @@
     "hip": "(1<<12)"
   },
   "19_graph_shortest_path": {
-    "serial": "(1<<12)",
-    "omp": "(1<<12)",
+    "serial": "(1<<13)",
+    "omp": "(1<<13)",
     "mpi": "(1<<12)",
     "mpi+omp": "(1<<12)",
     "kokkos": "(1<<11)",
@@ -315,7 +315,7 @@
     "hip": "(1<<15)"
   },
   "35_search_search_for_last_struct_by_key": {
-    "serial": "(1<<21)",
+    "serial": "(1<<25)",
     "omp": "(1<<25)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
@@ -324,7 +324,7 @@
     "hip": "(1<<21)"
   },
   "36_search_check_if_array_contains_value": {
-    "serial": "(1<<21)",
+    "serial": "(1<<25)",
     "omp": "(1<<25)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
@@ -333,7 +333,7 @@
     "hip": "(1<<21)"
   },
   "37_search_find_the_closest_number_to_pi": {
-    "serial": "(1<<21)",
+    "serial": "(1<<24)",
     "omp": "(1<<24)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
@@ -342,7 +342,7 @@
     "hip": "(1<<21)"
   },
   "38_search_find_the_first_even_number": {
-    "serial": "(1<<21)",
+    "serial": "(1<<26)",
     "omp": "(1<<26)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
@@ -351,7 +351,7 @@
     "hip": "(1<<21)"
   },
   "39_search_xor_contains": {
-    "serial": "(1<<21)",
+    "serial": "(1<<28)",
     "omp": "(1<<28)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
@@ -612,8 +612,8 @@
     "omp": "(1<<10)"
   },
   "durbin": {
-    "serial": "(1<<15)",
-    "omp": "(1<<15)"
+    "serial": "(1<<11)",
+    "omp": "(1<<11)"
   },
   "gramschmidt": {
     "serial": "(1<<10)",
