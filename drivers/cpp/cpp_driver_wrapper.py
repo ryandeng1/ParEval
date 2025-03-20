@@ -36,8 +36,6 @@ DRIVER_MAP = {
 COMPILER_SETTINGS = {
     "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -g -march=native "},
     "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -g -march=native "},
-    # "serial": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -g"},
-    # "omp": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -g"},
     "mpi": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3"},
     "mpi+omp": {"CXX": "mpicxx", "CXXFLAGS": "-std=c++17 -O3 -fopenmp"},
     "kokkos": {"CXX": "g++", "CXXFLAGS": "-std=c++17 -O3 -fopenmp -I../tpl/kokkos/build/include ../tpl/kokkos/build/lib64/libkokkoscore.a ../tpl/kokkos/build/lib64/libkokkoscontainers.a ../tpl/kokkos/build/lib64/libkokkossimd.a"},
@@ -207,14 +205,14 @@ class CppDriverWrapper(DriverWrapper):
 
             # include the C++ standard library as well as header for vectorization
             # include_header = "#pragma once\n#include <bits/stdc++.h>\n#include <immintrin.h>\n"
-            include_header = ""
             if self.code_opt:
-                function_name = extract_function_names_from_prompt(prompt)
-                output_with_extra_headers = include_header + "\n" + output
-                output_with_namespace = wrap_with_namespace_gpt(output_with_extra_headers)
-                # write_success = self.write_source(output_with_namespace, src_path)
-                add_noinline = add_noinline_to_function(output_with_namespace, function_name)
-                write_success = self.write_source(add_noinline, src_path)
+                # write_success = self.write_source(output, src_path)
+                output_with_namespace = wrap_with_namespace_gpt(output)
+                write_success = self.write_source(output_with_namespace, src_path)
+                # function_name = extract_function_names_from_prompt(prompt)
+                # add_noinline = add_noinline_to_function(output_with_namespace, function_name)
+                # output = add_noinline
+                # write_success = self.write_source(output, src_path)
             else:
                 prompt = self.patch_prompt(prompt)
                 write_success = self.write_source(include_header+"\n"+prompt+"\n"+output, src_path)
@@ -248,11 +246,11 @@ class CppDriverWrapper(DriverWrapper):
                     print(f"one run time: {end - start}")
                     run_results.append(run_result)
 
-                    # print("RUN RESULT: ", run_result)
-                    # print("STDOUT: ", run_result.stdout)
-                    # print("STDERR: ", run_result.stderr)
+                    print("RUN RESULT: ", run_result)
+                    print("STDOUT: ", run_result.stdout)
+                    print("STDERR: ", run_result.stderr)
                     # print("--- OUTPUT ---")
-                    # print(add_noinline)
+                    # print(output_with_namespace)
 
                     # exit code 0 means no runtime errors
                     if run_result.exit_code == 0 and run_result.is_valid:

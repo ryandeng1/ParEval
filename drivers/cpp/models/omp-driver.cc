@@ -19,6 +19,7 @@
 #include <omp.h>
 #include <chrono>
 #include <random>
+#include <iostream>
 #include <nanobench.h>
 
 class Context;
@@ -31,6 +32,9 @@ extern "C++" {
     bool validate(Context *ctx, std::mt19937& engine);
     void reset(Context *ctx, std::mt19937& engine);
     void destroy(Context *ctx);
+
+    // newly added
+    Context* copy(Context* ctx);
 }
 
 int main(int argc, char **argv) {
@@ -79,6 +83,7 @@ int main(int argc, char **argv) {
     const int NUM_WARMUP_ITER = 3;
 
     /*
+
     for (int i = 0; i < NUM_WARMUP_ITER; i++) {
 	engine.seed(i);
         reset(ctx, engine);
@@ -121,49 +126,54 @@ int main(int argc, char **argv) {
     */
 
     ankerl::nanobench::Bench bench_llm;
-    // bench_llm.warmup(NUM_WARMUP_ITER);
+    std::vector<double> runtimes_llm;
+    runtimes_llm.reserve(1024);
     for (int i = 0; i < NITER; i += 1) {
 	engine.seed(i);
         reset(ctx, engine);
 
 	bench_llm.run("llm code", [&]() {
-	    compute(ctx);
+	    Context* new_ctx = copy(ctx);
+
+	    auto begin = std::chrono::high_resolution_clock::now();
+	    compute(new_ctx);
+	    auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+	    runtimes_llm.push_back(duration * 1.0 / 1e6);
+
+	    destroy(new_ctx);
 	});
     }
 
-    std::vector<double> runtimes_llm;
-    for (int i = 0; i < NITER; i++) {
-        auto const& r_llm = bench_llm.results()[i];
-        auto time_llm = r_llm.median(ankerl::nanobench::Result::Measure::elapsed);
-	runtimes_llm.push_back(time_llm);
-    }
-
-    auto avg_time_llm = std::reduce(runtimes_llm.begin(), runtimes_llm.end()) / static_cast<double>(NITER);
-
-    printf("Time: %.17g\n", avg_time_llm);
-
     ankerl::nanobench::Bench bench_baseline;
-    // bench_baseline.warmup(NUM_WARMUP_ITER);
+    std::vector<double> runtimes_baseline;
+    runtimes_baseline.reserve(1024);
     for (int i = 0; i < NITER; i += 1) {
 	engine.seed(i);
         reset(ctx, engine);
 
 	// ankerl::nanobench::Bench().run("baseline code", [&]() {
 	bench_baseline.run("baseline code", [&]() {
-	    best(ctx);
+	    Context* new_ctx = copy(ctx);
+
+	    auto begin = std::chrono::high_resolution_clock::now();
+	    best(new_ctx);
+	    auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+	    runtimes_baseline.push_back(duration * 1.0 / 1e6);
+
+	    destroy(new_ctx);
 	});
     }
 
-    std::vector<double> runtimes_baseline;
-    for (int i = 0; i < NITER; i++) {
-        auto const& r_baseline = bench_baseline.results()[i];
-        auto time_baseline = r_baseline.median(ankerl::nanobench::Result::Measure::elapsed);
-	runtimes_baseline.push_back(time_baseline);
-    }
+    std::sort(runtimes_llm.begin(), runtimes_llm.end());
+    std::sort(runtimes_baseline.begin(), runtimes_baseline.end());
 
-    auto avg_time_baseline = std::reduce(runtimes_baseline.begin(), runtimes_baseline.end()) / static_cast<double>(NITER);
+    auto time_llm = runtimes_llm[runtimes_llm.size() / 2];
+    auto time_baseline = runtimes_baseline[runtimes_baseline.size() / 2];
 
-    printf("BestSequential: %.*f\n", DBL_DIG-1, avg_time_baseline);
+    printf("Time: %.17g\n", time_llm);
+    printf("BestSequential: %.*f\n", DBL_DIG-1, time_baseline);
 
     /* cleanup */
     destroy(ctx);
