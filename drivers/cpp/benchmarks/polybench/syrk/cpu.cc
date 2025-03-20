@@ -63,6 +63,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_syrk(ctx->n, ctx->m, ctx->alpha, ctx->beta, ctx->C, ctx->A);
 }

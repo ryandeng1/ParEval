@@ -91,6 +91,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_2mm(ctx->ni, ctx->nj, ctx->nk, ctx->nl, ctx->alpha, ctx->beta, ctx->tmp, ctx->A, ctx->B, ctx->C, ctx->D);
 }

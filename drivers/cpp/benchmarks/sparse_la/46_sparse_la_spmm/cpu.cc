@@ -138,6 +138,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::spmm(ctx->A, ctx->X, ctx->Y, ctx->M, ctx->K, ctx->N);
 }

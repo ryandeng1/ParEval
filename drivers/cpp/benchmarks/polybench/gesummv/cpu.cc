@@ -63,6 +63,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_gesummv(ctx->n, ctx->alpha, ctx->beta, ctx->A, ctx->B, ctx->tmp, ctx->x, ctx->y);
 }

@@ -70,6 +70,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_gemver(ctx->n, ctx->alpha, ctx->beta, ctx->A, ctx->u1, ctx->v1, ctx->u2, ctx->v2, ctx->w, ctx->x, ctx->y, ctx->z);
 }

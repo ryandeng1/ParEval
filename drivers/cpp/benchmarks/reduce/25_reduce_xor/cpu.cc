@@ -50,6 +50,12 @@ void reset(Context *ctx, std::mt19937& engine) {
     bcastBools(ctx->x);
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 Context *init() {
     Context *ctx = new Context();
 

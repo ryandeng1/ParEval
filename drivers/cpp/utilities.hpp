@@ -31,8 +31,10 @@ DType get_random_val_range(DType min, DType max, std::mt19937& engine) {
 #error "No parallel model not defined"
 #endif
 
-#define NO_OPTIMIZE __attribute__((optimize("O0")))
-#define NO_INLINE __attribute__((noinline)) __attribute__((optimize("O3")))
+// #define NO_OPTIMIZE __attribute__((optimize("O0")))
+// #define NO_INLINE __attribute__((noinline)) __attribute__((optimize("O3")))
+#define NO_OPTIMIZE ""
+#define NO_INLINE ""
 
 #if !defined(DRIVER_PROBLEM_SIZE)
 #error "DRIVER_PROBLEM_SIZE not defined"

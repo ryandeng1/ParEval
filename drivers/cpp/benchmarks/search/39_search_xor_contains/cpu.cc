@@ -70,6 +70,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     bool found = submission::xorContains(ctx->x, ctx->y, ctx->val);
     (void)found;

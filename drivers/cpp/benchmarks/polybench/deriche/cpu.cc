@@ -55,6 +55,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_deriche(ctx->w, ctx->h, ctx->alpha, ctx->imgIn, ctx->imgOut, ctx->y1, ctx->y2);
 }

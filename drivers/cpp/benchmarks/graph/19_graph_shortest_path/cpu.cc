@@ -101,6 +101,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     int sp = submission::shortestPathLength(ctx->A, ctx->N, ctx->source, ctx->dest);
     (void)sp;

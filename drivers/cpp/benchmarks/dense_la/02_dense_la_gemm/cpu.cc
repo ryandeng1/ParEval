@@ -55,6 +55,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::gemm(ctx->A, ctx->B, ctx->C, ctx->M, ctx->K, ctx->N);
 }

@@ -56,6 +56,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_mvt(ctx->n, ctx->x1, ctx->x2, ctx->y_1, ctx->y_2, ctx->A);
 }

@@ -57,6 +57,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_correlation(ctx->m, ctx->n, ctx->data, ctx->corr, ctx->mean, ctx->stddev);
 }

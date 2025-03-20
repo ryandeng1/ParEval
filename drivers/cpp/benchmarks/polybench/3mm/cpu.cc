@@ -98,6 +98,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_3mm(ctx->ni, ctx->nj, ctx->nk, ctx->nl, ctx->nm, ctx->E, ctx->A, ctx->B, ctx->F, ctx->C, ctx->D, ctx->G);
 }

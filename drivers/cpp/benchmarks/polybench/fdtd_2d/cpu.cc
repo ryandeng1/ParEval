@@ -64,6 +64,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_fdtd_2d(ctx->tmax, ctx->nx, ctx->ny, ctx->ex, ctx->ey, ctx->hz, ctx->_fict_);
 }

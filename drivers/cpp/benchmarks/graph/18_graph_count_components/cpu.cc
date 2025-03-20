@@ -13,6 +13,7 @@
 #include <numeric>
 #include <random>
 #include <vector>
+#include <iostream>
 
 #include "utilities.hpp"
 #include "baseline.hpp"
@@ -42,13 +43,21 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     int cc = submission::componentCount(ctx->A, ctx->N);
+    std::cout << "cc: " << cc << std::endl;
     (void)cc;
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     int cc = correctComponentCount(ctx->A, ctx->N);
+    std::cout << "cc: " << cc << std::endl;
     (void)cc;
 }
 

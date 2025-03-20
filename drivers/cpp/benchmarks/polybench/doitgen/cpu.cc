@@ -68,6 +68,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_doitgen(ctx->nr, ctx->nq, ctx->np, ctx->A, ctx->C4, ctx->sum);
 }

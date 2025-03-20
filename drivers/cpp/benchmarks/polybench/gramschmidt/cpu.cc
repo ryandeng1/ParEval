@@ -64,6 +64,12 @@ Context *init() {
     return ctx;
 }
 
+Context* copy(Context* ctx) {
+    Context* new_ctx = new Context();
+    *new_ctx = *ctx;
+    return new_ctx;
+}
+
 void NO_OPTIMIZE compute(Context *ctx) {
     submission::kernel_gramschmidt(ctx->m, ctx->n, ctx->A, ctx->R, ctx->Q);
 }
