@@ -14,6 +14,8 @@
 #include <numeric>
 #include <random>
 #include <vector>
+#include <iostream>
+#include <chrono>
 
 #include "utilities.hpp"
 #include "baseline.hpp"
@@ -50,11 +52,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     int val = submission::maximumSubarray(ctx->x);
     (void) val;
+    asm volatile ("" : "+r"(val));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     int val = correctMaximumSubarray(ctx->x);
     (void) val;
+    asm volatile ("" : "+r"(val));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

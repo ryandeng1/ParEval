@@ -110,11 +110,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     int sp = submission::shortestPathLength(ctx->A, ctx->N, ctx->source, ctx->dest);
     (void)sp;
+    asm volatile ("" : "+r"(sp));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     int sp = correctShortestPathLength(ctx->A, ctx->N, ctx->source, ctx->dest);
     (void)sp;
+    asm volatile ("" : "+r"(sp));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

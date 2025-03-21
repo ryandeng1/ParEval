@@ -70,11 +70,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     double perimeter = submission::convexHullPerimeter(ctx->points);
     (void)perimeter;
+    asm volatile ("" : "+r"(perimeter));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     double perimeter = correctConvexHullPerimeter(ctx->points);
     (void)perimeter;
+    asm volatile ("" : "+r"(perimeter));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

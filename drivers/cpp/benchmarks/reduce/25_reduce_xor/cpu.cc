@@ -68,11 +68,13 @@ Context *init() {
 void NO_OPTIMIZE compute(Context *ctx) {
     bool out = submission::reduceLogicalXOR(ctx->x);
     (void) out;
+    asm volatile ("" : "+r"(out));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     bool out = correctReduceLogicalXOR(ctx->x);
     (void) out;
+    asm volatile ("" : "+r"(out));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

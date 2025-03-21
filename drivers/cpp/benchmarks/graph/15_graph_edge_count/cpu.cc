@@ -55,11 +55,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     int ec = submission::edgeCount(ctx->A, ctx->N);
     (void)ec;
+    asm volatile ("" : "+r"(ec));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     int ec = correctEdgeCount(ctx->A, ctx->N);
     (void)ec;
+    asm volatile ("" : "+r"(ec));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

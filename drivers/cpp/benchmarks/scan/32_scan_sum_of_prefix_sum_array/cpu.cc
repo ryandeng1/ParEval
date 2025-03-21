@@ -52,11 +52,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     double val = submission::sumOfPrefixSum(ctx->x);
     (void) val;
+    asm volatile ("" : "+r"(val));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     double val = correctSumOfPrefixSum(ctx->x);
     (void) val;
+    asm volatile ("" : "+r"(val));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

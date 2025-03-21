@@ -53,11 +53,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     int sm = submission::findKthSmallest(ctx->x, ctx->k);
     (void)sm;
+    asm volatile ("" : "+r"(sm));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     int sm = correctFindKthSmallest(ctx->x, ctx->k);
     (void)sm;
+    asm volatile ("" : "+r"(sm));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

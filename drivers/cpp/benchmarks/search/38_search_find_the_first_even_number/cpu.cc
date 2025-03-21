@@ -69,11 +69,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     size_t idx = submission::findFirstEven(ctx->x);
     (void)idx;
+    asm volatile ("" : "+r"(idx));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     size_t idx = correctFindFirstEven(ctx->x);
     (void)idx;
+    asm volatile ("" : "+r"(idx));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

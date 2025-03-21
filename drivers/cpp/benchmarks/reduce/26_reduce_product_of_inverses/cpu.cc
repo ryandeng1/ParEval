@@ -54,11 +54,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     double val = submission::productWithInverses(ctx->x);
     (void)val;
+    asm volatile ("" : "+r"(val));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     double val = correctProductWithInverses(ctx->x);
     (void)val;
+    asm volatile ("" : "+r"(val));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

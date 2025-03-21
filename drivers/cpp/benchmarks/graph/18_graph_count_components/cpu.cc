@@ -51,14 +51,14 @@ Context* copy(Context* ctx) {
 
 void NO_OPTIMIZE compute(Context *ctx) {
     int cc = submission::componentCount(ctx->A, ctx->N);
-    std::cout << "cc: " << cc << std::endl;
     (void)cc;
+    asm volatile ("" : "+r"(cc));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     int cc = correctComponentCount(ctx->A, ctx->N);
-    std::cout << "cc: " << cc << std::endl;
     (void)cc;
+    asm volatile ("" : "+r"(cc));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

@@ -79,11 +79,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     bool found = submission::xorContains(ctx->x, ctx->y, ctx->val);
     (void)found;
+    asm volatile ("" : "+r"(found));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     bool found = correctXorContains(ctx->x, ctx->y, ctx->val);
     (void)found;
+    asm volatile ("" : "+r"(found));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

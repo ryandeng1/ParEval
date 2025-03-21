@@ -80,7 +80,7 @@ bool validate(Context *ctx, std::mt19937& engine) {
     // compute test result
     test = input;
     submission::partialMinimums(test);
-    sync();
+    SYNC();
 
     bool isCorrect = true;
     if (IS_ROOT(rank) && !fequal(correct, test, 1e-3)) {

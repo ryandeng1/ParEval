@@ -53,11 +53,13 @@ Context* copy(Context* ctx) {
 void NO_OPTIMIZE compute(Context *ctx) {
     int lc = submission::largestComponent(ctx->A, ctx->N);
     (void)lc;
+    asm volatile ("" : "+r"(lc));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
     int lc = correctLargestComponent(ctx->A, ctx->N);
     (void)lc;
+    asm volatile ("" : "+r"(lc));  // Prevents compiler from optimizing var away
 }
 
 bool validate(Context *ctx, std::mt19937& engine) {

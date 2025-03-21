@@ -142,7 +142,7 @@
     {
         "prompt": "/* Compute the prefix sum of the vector x into output.\n   Example:\n   \n   input: [1, 7, 4, 6, 6, 2]\n   output: [1, 8, 12, 18, 24, 26]\n*/\nvoid prefixSum(std::vector<double> const& x, std::vector<double> &output) {",
         "omp_prompt": "/* Compute the prefix sum of the vector x into output.\n   Use OpenMP to compute in parallel.\n   Example:\n   \n   input: [1, 7, 4, 6, 6, 2]\n   output: [1, 8, 12, 18, 24, 26]\n*/\nvoid prefixSum(std::vector<double> const& x, std::vector<double> &output) {",
-        "src_code": "#pragma once\n#include <numeric>\n#include <vector>\n\n\n\n/* Compute the prefix sum of the vector x into output.\n   Example:\n   input: [1, 7, 4, 6, 6, 2]\n   output: [1, 8, 12, 18, 24, 26]\n*/\nvoid prefixSum(std::vector<double> const& x, std::vector<double> &output) {\n    std::inclusive_scan(x.begin(), x.end(), output.begin());\n}",
+        "src_code": "#pragma once\n#include <numeric>\n#include <vector>\n\n\n\n/* Compute the prefix sum of the vector x into output.\n   Example:\n   input: [1, 7, 4, 6, 6, 2]\n   output: [1, 8, 12, 18, 24, 26]\n*/\nvoid prefixSum(std::vector<int64_t> const& x, std::vector<int64_t> &output) {\n    std::inclusive_scan(x.begin(), x.end(), output.begin());\n}",
         "problem_type": "scan",
         "language": "cpp",
         "parallelism_model": "serial",
@@ -282,7 +282,7 @@
     {
         "prompt": "/* Return the sum of the minimum value at each index of vectors x and y for all indices.\n   i.e. sum = min(x_0, y_0) + min(x_1, y_1) + min(x_2, y_2) + ...\n   Example:\n\n   input: x=[3, 4, 0, 2, 3], y=[2, 5, 3, 1, 7]\n   output: 10\n*/\ndouble sumOfMinimumElements(std::vector<double> const& x, std::vector<double> const& y) {",
         "omp_prompt": "/* Return the sum of the minimum value at each index of vectors x and y for all indices.\n   i.e. sum = min(x_0, y_0) + min(x_1, y_1) + min(x_2, y_2) + ...\n   Use OpenMP to sum in parallel.\n   Example:\n\n   input: x=[3, 4, 0, 2, 3], y=[2, 5, 3, 1, 7]\n   output: 10\n*/\ndouble sumOfMinimumElements(std::vector<double> const& x, std::vector<double> const& y) {",
-        "src_code": "#pragma once\n#include <vector>\n#include <algorithm>\n#include <numeric>\n\n\n\n/* Return the sum of the minimum value at each index of vectors x and y for all indices.\n   i.e. sum = min(x_0, y_0) + min(x_1, y_1) + min(x_2, y_2) + ...\n   Example:\n   input: x=[3, 4, 0, 2, 3], y=[2, 5, 3, 1, 7]\n   output: 10\n*/\ndouble sumOfMinimumElements(std::vector<double> const& x, std::vector<double> const& y) {\n    std::vector<double> z;\n    z.resize(x.size());\n    std::transform(x.begin(), x.end(), y.begin(), z.begin(), [] (const auto &a, const auto &b) {\n        return std::min(a, b);\n    });\n    return std::reduce(z.begin(), z.end());\n}",
+        "src_code": "#pragma once\n#include <vector>\n#include <algorithm>\n#include <numeric>\n\n\n\n/* Return the sum of the minimum value at each index of vectors x and y for all indices.\n   i.e. sum = min(x_0, y_0) + min(x_1, y_1) + min(x_2, y_2) + ...\n   Example:\n   input: x=[3, 4, 0, 2, 3], y=[2, 5, 3, 1, 7]\n   output: 10\n*/\nint64_t sumOfMinimumElements(std::vector<int64_t> const& x, std::vector<int64_t> const& y) {\n    std::vector<int64_t> z;\n    z.resize(x.size());\n    std::transform(x.begin(), x.end(), y.begin(), z.begin(), [] (const auto &a, const auto &b) {\n        return std::min(a, b);\n    });\n    return std::reduce(z.begin(), z.end());\n}",
         "problem_type": "reduce",
         "language": "cpp",
         "parallelism_model": "serial",
