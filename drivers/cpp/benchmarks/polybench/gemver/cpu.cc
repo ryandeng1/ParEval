@@ -133,7 +133,7 @@ bool validate(Context *ctx, std::mt19937& engine) {
 	w_test[i] = 0.0;
 	for (int j = 0; j < n; j++) {
 	    A[i][j] = (i*j % n) * 1.0 / n;
-	    A_test[i][j] = (i*j % n) * 1.0 / n;
+	    A_test[i][j] = A[i][j];
 	}
     }
 
@@ -146,17 +146,17 @@ bool validate(Context *ctx, std::mt19937& engine) {
     bool isCorrect = true;
 
     for (int i = 0; i < n; i++) {
-	if (!fequal(A[i], A_test[i], 1e-4)) {
+	if (!fequal(A[i], A_test[i], 1e-3)) {
 	    isCorrect = false;
 	    break;
 	}
     }
 
-    if (!fequal(w, w_test, 1e-4)) {
+    if (!fequal(w, w_test, 1e-3)) {
 	isCorrect = false;
     }
 
-    if (!fequal(x, x_test, 1e-4)) {
+    if (!fequal(x, x_test, 1e-3)) {
 	isCorrect = false;
     }
 

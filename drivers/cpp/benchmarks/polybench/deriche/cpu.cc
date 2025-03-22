@@ -13,6 +13,7 @@
 #include <numeric>
 #include <random>
 #include <vector>
+#include <iostream>
 
 #include "utilities.hpp"
 #include "baseline.hpp"
@@ -27,7 +28,7 @@ struct Context {
 void reset(Context *ctx, std::mt19937& engine) {
     for (int i = 0; i < ctx->w; i++) {
         for (int j = 0; j < ctx->h; j++) {
-	    ctx->imgIn[i][j] = (float) ((313*i+991*j)%65536) / 65535.0f;
+	    ctx->imgIn[i][j] = (float) ((313*i+991*j)%65536) * 1.0 / 65535.0;
 	}
     }
 }
@@ -102,7 +103,7 @@ bool validate(Context *ctx, std::mt19937& engine) {
     // set up input
     for (int i = 0; i < w; i++) {
 	for (int j = 0; j < h; j++) {
-	    imgIn[i][j] = (float) ((313*i+991*j)%65536) / 65535.0f;
+	    imgIn[i][j] = (float) ((313*i+991*j)%65536) * 1.0 / 65535.0;
 	}
     }
 
@@ -114,7 +115,7 @@ bool validate(Context *ctx, std::mt19937& engine) {
     
     bool isCorrect = true;
 
-    for (int i = 0; i < TEST_SIZE; i++) {
+    for (int i = 0; i < w; i++) {
 	if (!fequal(imgOut_correct[i], imgOut_test[i], 1e-4)) {
 	    isCorrect = false;
 	    break;

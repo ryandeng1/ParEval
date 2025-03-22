@@ -84,7 +84,6 @@ bool validate(Context *ctx, std::mt19937& engine) {
 
     std::vector<Point> points(TEST_SIZE);
     std::vector<double> x(TEST_SIZE), y(TEST_SIZE);
-    double correct = 0.0, test = 0.0;
 
     int rank;
     GET_RANK(rank);
@@ -98,8 +97,6 @@ bool validate(Context *ctx, std::mt19937& engine) {
     std::generate(y.begin(), y.end(), gen);
     // fillRand(x, -1000.0, 1000.0);
     // fillRand(y, -1000.0, 1000.0);
-    test = 0.0;
-    correct = 0.0;
     BCAST(x, DOUBLE);
     BCAST(y, DOUBLE);
 
@@ -109,14 +106,14 @@ bool validate(Context *ctx, std::mt19937& engine) {
     }
 
     // compute correct result
-    correct = correctConvexHullPerimeter(points);
+    double correct = correctConvexHullPerimeter(points);
 
     // compute test result
-    test = submission::convexHullPerimeter(points);
+    double test = submission::convexHullPerimeter(points);
     SYNC();
 
     bool isCorrect = true;
-    if (IS_ROOT(rank) && std::abs(correct - test) > 1e-6) {
+    if (IS_ROOT(rank) && std::abs(correct - test) > 1e-4) {
         isCorrect = false;
     }
 

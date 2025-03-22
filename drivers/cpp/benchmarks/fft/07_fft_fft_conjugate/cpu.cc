@@ -12,6 +12,7 @@
 #include <numeric>
 #include <random>
 #include <vector>
+#include <iostream>
 
 #include "utilities.hpp"
 #include "baseline.hpp"
@@ -91,7 +92,9 @@ bool validate(Context *ctx, std::mt19937& engine) {
 
     // compute correct result
     std::vector<std::complex<double>> correct = x;
-    fftCooleyTookey(correct);
+    // fftCoolkeyTookey and correctFft seem to compute the same results but the signs flipped on the imaginary part, so we use correctFft to remain consistent
+    // fftCooleyTookey(correct);
+    correctFft(correct);
 
     // compute test result
     std::vector<std::complex<double>> test = x;

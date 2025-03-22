@@ -21,10 +21,50 @@ void NO_INLINE correctConvexHull(std::vector<Point> const& points, std::vector<P
         return a.x < b.x || (a.x == b.x && a.y < b.y);
     });
 
+    /*
     auto CrossProduct = [](Point const& a, Point const& b, Point const& c) {
         return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x) > 0;
     };
+    */
 
+    auto CrossProduct = [](Point const& a, Point const& b, Point const& c) {
+        return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    };
+
+    std::vector<Point> ans(2 * pointsSorted.size());
+
+    int n = points.size();
+
+    int k = 0;
+    // Build lower hull
+    for (int i = 0; i < n; ++i) {
+        // If the point at K-1 position is not a part
+        // of hull as vector from ans[k-2] to ans[k-1]
+        // and ans[k-2] to pointsSorted[i] has a clockwise turn
+        while (k >= 2 && CrossProduct(ans[k - 2], ans[k - 1], pointsSorted[i]) <= 0) {
+            k--;
+	}
+        ans[k++] = pointsSorted[i];
+    }
+
+    // Build upper hull
+    for (int i = n - 1, t = k + 1; i > 0; --i) {
+        // If the point at K-1 position is not a part
+        // of hull as vector from ans[k-2] to ans[k-1]
+        // and ans[k-2] to pointsSorted[i] has a clockwise turn
+        while (k >= t && CrossProduct(ans[k - 2], ans[k - 1], pointsSorted[i - 1]) <= 0) {
+            k--;
+	}
+        ans[k++] = pointsSorted[i - 1];
+    }
+
+    // Resize the array to desired size
+    ans.resize(k - 1);
+
+    hull = ans;
+    return;
+
+    /*
     std::vector<Point> upperHull;
     std::vector<Point> lowerHull;
     upperHull.push_back(pointsSorted[0]);
@@ -51,4 +91,5 @@ void NO_INLINE correctConvexHull(std::vector<Point> const& points, std::vector<P
 
     hull = upperHull;
     return;
+    */
 }

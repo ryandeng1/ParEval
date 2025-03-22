@@ -27,7 +27,8 @@ struct Context {
 };
 
 void reset(Context *ctx, std::mt19937& engine) {
-    std::uniform_real_distribution<> dist(0, 100.0);
+    // std::uniform_real_distribution<> dist(0, 100.0);
+    std::uniform_real_distribution<> dist(1.0, 1.1);
 
     auto gen = [&](){ return dist(engine); };
 
@@ -63,17 +64,24 @@ void NO_OPTIMIZE best(Context *ctx) {
     asm volatile ("" : "+r"(val));  // Prevents compiler from optimizing var away
 }
 
+bool nearlyEqual(double a, double b, double relEpsilon = 1e-9) {
+    double diff = std::fabs(a - b);
+    double largest = std::fmax(std::fabs(a), std::fabs(b));
+
+    return diff <= largest * relEpsilon;
+}
+
 bool validate(Context *ctx, std::mt19937& engine) {
     const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
     std::vector<double> x(TEST_SIZE);
-    double test, correct;
 
     int rank;
     GET_RANK(rank);
 
     // set up input
-    std::uniform_real_distribution<> dist(0, 100.0);
+    // std::uniform_real_distribution<> dist(0, 100.0);
+    std::uniform_real_distribution<> dist(1.0, 1.1);
 
     auto gen = [&](){ return dist(engine); };
 
@@ -82,17 +90,18 @@ bool validate(Context *ctx, std::mt19937& engine) {
     BCAST(x, DOUBLE);
 
     // compute correct result
-    correct = correctProductWithInverses(x);
+    double correct = correctProductWithInverses(x);
 
     // compute test result
-    test = submission::productWithInverses(x);
+    double test = submission::productWithInverses(x);
     SYNC();
 
     bool isCorrect = true;
     if (std::isnan(test)) {
 	isCorrect = false;
     }
-    if (IS_ROOT(rank) && std::abs(correct - test) > 1e-4) {
+    // if (IS_ROOT(rank) && std::abs(correct - test) > 1e-3) {
+    if (IS_ROOT(rank) && !nearlyEqual(correct, test)) {
         isCorrect = false;
     }
     if (IS_ROOT(rank) && std::isnan(correct) || std::isnan(test)) {

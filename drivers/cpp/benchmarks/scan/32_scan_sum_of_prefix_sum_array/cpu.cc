@@ -21,11 +21,11 @@
 #include <iostream>
 
 struct Context {
-    std::vector<double> x;
+    std::vector<int64_t> x;
 };
 
 void reset(Context *ctx, std::mt19937& engine) {
-    std::uniform_real_distribution<> dist(-100.0, 100.0);
+    std::uniform_int_distribution<> dist(-2, 2);
 
     auto gen = [&](){ return dist(engine); };
 
@@ -50,13 +50,13 @@ Context* copy(Context* ctx) {
 }
 
 void NO_OPTIMIZE compute(Context *ctx) {
-    double val = submission::sumOfPrefixSum(ctx->x);
+    int64_t val = submission::sumOfPrefixSum(ctx->x);
     (void) val;
     asm volatile ("" : "+r"(val));  // Prevents compiler from optimizing var away
 }
 
 void NO_OPTIMIZE best(Context *ctx) {
-    double val = correctSumOfPrefixSum(ctx->x);
+    int64_t val = correctSumOfPrefixSum(ctx->x);
     (void) val;
     asm volatile ("" : "+r"(val));  // Prevents compiler from optimizing var away
 }
@@ -64,13 +64,13 @@ void NO_OPTIMIZE best(Context *ctx) {
 bool validate(Context *ctx, std::mt19937& engine) {
     const size_t TEST_SIZE = DRIVER_PROBLEM_SIZE;
 
-    std::vector<double> input(TEST_SIZE);
+    std::vector<int64_t> input(TEST_SIZE);
 
     int rank;
     GET_RANK(rank);
 
     // set up input
-    std::uniform_real_distribution<> dist(-100.0, 100.0);
+    std::uniform_int_distribution<> dist(-2, 2);
 
     auto gen = [&](){ return dist(engine); };
 
@@ -79,18 +79,20 @@ bool validate(Context *ctx, std::mt19937& engine) {
     BCAST(input, DOUBLE);
 
     // compute correct result
-    double correctResult = correctSumOfPrefixSum(input);
+    int64_t correctResult = correctSumOfPrefixSum(input);
 
     // compute test result
-    double testResult = submission::sumOfPrefixSum(input);
+    int64_t testResult = submission::sumOfPrefixSum(input);
     SYNC();
 
     bool isCorrect = true;
+    /*
     if (std::isnan(testResult)) {
 	isCorrect = false;
     }
+    */
 
-    if (IS_ROOT(rank) && std::fabs(correctResult - testResult) > 1e-5) {
+    if (IS_ROOT(rank) && correctResult != testResult) {
         isCorrect = false;
     }
     BCAST_PTR(&isCorrect, 1, CXX_BOOL);

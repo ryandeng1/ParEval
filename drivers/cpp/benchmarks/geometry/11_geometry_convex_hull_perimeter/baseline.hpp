@@ -21,15 +21,64 @@ double NO_INLINE correctConvexHullPerimeter(std::vector<Point> const& points) {
         return a.x < b.x || (a.x == b.x && a.y < b.y);
     });
 
+    /*
     auto CrossProduct = [](Point const& a, Point const& b, Point const& c) {
-        return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x) > 0;
+        return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
+    };
+    */
+
+    auto CrossProduct = [](Point const& a, Point const& b, Point const& c) {
+        return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
     };
 
     auto dist = [](Point const& p1, Point const& p2) {
         return sqrt(pow(p2.x-p1.x, 2) + pow(p2.y-p1.y, 2));
     };
 
+    // Implementation taken from https://www.geeksforgeeks.org/perimeter-of-convex-hull-for-a-given-set-of-points/
+    std::vector<Point> ans(2 * pointsSorted.size());
 
+    int n = points.size();
+
+    int k = 0;
+    // Build lower hull
+    for (int i = 0; i < n; ++i) {
+        // If the point at K-1 position is not a part
+        // of hull as vector from ans[k-2] to ans[k-1]
+        // and ans[k-2] to pointsSorted[i] has a clockwise turn
+        while (k >= 2 && CrossProduct(ans[k - 2], ans[k - 1], pointsSorted[i]) <= 0) {
+            k--;
+	}
+        ans[k++] = pointsSorted[i];
+    }
+
+    // Build upper hull
+    for (int i = n - 1, t = k + 1; i > 0; --i) {
+        // If the point at K-1 position is not a part
+        // of hull as vector from ans[k-2] to ans[k-1]
+        // and ans[k-2] to pointsSorted[i] has a clockwise turn
+        while (k >= t && CrossProduct(ans[k - 2], ans[k - 1], pointsSorted[i - 1]) <= 0) {
+            k--;
+	}
+        ans[k++] = pointsSorted[i - 1];
+    }
+
+    // Resize the array to desired size
+    ans.resize(k - 1);
+
+    double perimeter = 0.0;
+
+    // Find the distance between adjacent points
+    for (int i = 0; i < ans.size() - 1; i++) {
+        perimeter += dist(ans[i], ans[i + 1]);
+    }
+
+    // Add the distance between first and last point
+    perimeter += dist(ans[0], ans[ans.size() - 1]);
+
+    return perimeter;
+
+    /*
     std::vector<Point> upperHull;
     std::vector<Point> lowerHull;
     upperHull.push_back(pointsSorted[0]);
@@ -61,4 +110,5 @@ double NO_INLINE correctConvexHullPerimeter(std::vector<Point> const& points) {
     perimeter += dist(upperHull[0], upperHull[upperHull.size() - 1]);
 
     return perimeter;
+    */
 }

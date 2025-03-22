@@ -226,7 +226,7 @@
   },
   "25_reduce_xor": {
     "serial": "(1<<24)",
-    "omp": "(1<<24)",
+    "omp": "(1<<26)",
     "mpi": "(1<<24)",
     "mpi+omp": "(1<<24)",
     "kokkos": "(1<<23)",
@@ -234,8 +234,8 @@
     "hip": "(1<<24)"
   },
   "26_reduce_product_of_inverses": {
-    "serial": "(1<<23)",
-    "omp": "(1<<23)",
+    "serial": "(1<<25)",
+    "omp": "(1<<25)",
     "mpi": "(1<<23)",
     "mpi+omp": "(1<<23)",
     "kokkos": "(1<<23)",
@@ -244,7 +244,7 @@
   },
   "27_reduce_average": {
     "serial": "(1<<24)",
-    "omp": "(1<<24)",
+    "omp": "(1<<25)",
     "mpi": "(1<<24)",
     "mpi+omp": "(1<<24)",
     "kokkos": "(1<<23)",
@@ -253,7 +253,7 @@
   },
   "28_reduce_smallest_odd_number": {
     "serial": "(1<<24)",
-    "omp": "(1<<24)",
+    "omp": "(1<<25)",
     "mpi": "(1<<24)",
     "mpi+omp": "(1<<24)",
     "kokkos": "(1<<23)",
@@ -262,7 +262,7 @@
   },
   "29_reduce_sum_of_min_of_pairs": {
     "serial": "(1<<24)",
-    "omp": "(1<<30)",
+    "omp": "(1<<25)",
     "mpi": "(1<<24)",
     "mpi+omp": "(1<<24)",
     "kokkos": "(1<<23)",
@@ -271,7 +271,7 @@
   },
   "30_scan_prefix_sum": {
     "serial": "(1<<23)",
-    "omp": "(1<<28)",
+    "omp": "(1<<25)",
     "mpi": "(1<<23)",
     "mpi+omp": "(1<<23)",
     "kokkos": "(1<<23)",
@@ -280,7 +280,7 @@
   },
   "31_scan_scan_with_min_function": {
     "serial": "(1<<22)",
-    "omp": "(1<<28)",
+    "omp": "(1<<25)",
     "mpi": "(1<<20)",
     "mpi+omp": "(1<<20)",
     "kokkos": "(1<<22)",
@@ -288,8 +288,8 @@
     "hip": "(1<<22)"
   },
   "32_scan_sum_of_prefix_sum_array": {
-    "serial": "(1<<22)",
-    "omp": "(1<<28)",
+    "serial": "(1<<20)",
+    "omp": "(1<<20)",
     "mpi": "(1<<22)",
     "mpi+omp": "(1<<22)",
     "kokkos": "(1<<21)",
@@ -298,7 +298,7 @@
   },
   "33_scan_reverse_prefix_sum": {
     "serial": "(1<<22)",
-    "omp": "(1<<28)",
+    "omp": "(1<<25)",
     "mpi": "(1<<22)",
     "mpi+omp": "(1<<22)",
     "kokkos": "(1<<22)",
@@ -306,8 +306,8 @@
     "hip": "(1<<22)"
   },
   "34_scan_largest_contiguous_subarray_sum": {
-    "serial": "(1<<15)",
-    "omp": "(1<<15)",
+    "serial": "(1<<14)",
+    "omp": "(1<<14)",
     "mpi": "(1<<15)",
     "mpi+omp": "(1<<15)",
     "kokkos": "(1<<15)",
@@ -315,8 +315,8 @@
     "hip": "(1<<15)"
   },
   "35_search_search_for_last_struct_by_key": {
-    "serial": "(1<<25)",
-    "omp": "(1<<25)",
+    "serial": "(1<<24)",
+    "omp": "(1<<24)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
     "kokkos": "(1<<21)",
@@ -324,8 +324,8 @@
     "hip": "(1<<21)"
   },
   "36_search_check_if_array_contains_value": {
-    "serial": "(1<<25)",
-    "omp": "(1<<25)",
+    "serial": "(1<<24)",
+    "omp": "(1<<24)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
     "kokkos": "(1<<21)",
@@ -342,8 +342,8 @@
     "hip": "(1<<21)"
   },
   "38_search_find_the_first_even_number": {
-    "serial": "(1<<26)",
-    "omp": "(1<<26)",
+    "serial": "(1<<24)",
+    "omp": "(1<<24)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
     "kokkos": "(1<<21)",
@@ -351,8 +351,8 @@
     "hip": "(1<<21)"
   },
   "39_search_xor_contains": {
-    "serial": "(1<<28)",
-    "omp": "(1<<28)",
+    "serial": "(1<<24)",
+    "omp": "(1<<24)",
     "mpi": "(1<<21)",
     "mpi+omp": "(1<<21)",
     "kokkos": "(1<<21)",
@@ -424,7 +424,7 @@
   },
   "47_sparse_la_spmv": {
     "serial": "(1<<11)",
-    "omp": "(1<<15)",
+    "omp": "(1<<11)",
     "mpi": "(1<<11)",
     "mpi+omp": "(1<<11)",
     "kokkos": "(1<<11)",

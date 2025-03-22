@@ -31,10 +31,11 @@ void NO_INLINE correctLuFactorize(std::vector<COOElement> const& A, std::vector<
                }
          }
          if (i > j) {
-               L[i * N + j] = fullA[i][j] / U[j * N + j];
+               L[i * N + j] = fullA[i][j];
                for (size_t k = 0; k < j; ++k) {
-                  L[i * N + j] -= L[i * N + k] * U[k * N + j] / U[j * N + j];
+                  L[i * N + j] -= L[i * N + k] * U[k * N + j];
                }
+	       L[i * N + j] /= U[j * N + j];
          }
       }
       L[i * N + i] = 1;
